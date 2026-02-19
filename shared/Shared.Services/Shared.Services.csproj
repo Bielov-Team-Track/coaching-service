@@ -7,8 +7,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="AWSSDK.Core" Version="4.0.3.8" />
-    <PackageReference Include="AWSSDK.Extensions.NETCore.Setup" Version="4.0.3" />
+    <PackageReference Include="AWSSDK.Core" Version="4.0.3.12" />
+    <PackageReference Include="AWSSDK.Extensions.NETCore.Setup" Version="4.0.3.22" />
     <PackageReference Include="AWSSDK.SimpleEmailV2" Version="4.0.5.1" />
     <PackageReference Include="AWSSDK.S3" Version="4.0.7.1" />
     <PackageReference Include="Grpc.Net.Client" Version="2.71.0" />
