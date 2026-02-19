@@ -15,7 +15,7 @@
     <ProjectReference Include="..\shared\Shared.Services\Shared.Services.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Asp.Versioning.Mvc" Version="8.1.0" />
+    <PackageReference Include="Asp.Versioning.Mvc" Version="8.1.1" />
     <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" Version="8.1.0" />
     <PackageReference Include="Grpc.AspNetCore" Version="2.76.0" />
     <PackageReference Include="Grpc.AspNetCore.HealthChecks" Version="2.76.0" />
