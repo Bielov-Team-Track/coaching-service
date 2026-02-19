@@ -1,0 +1,36 @@
+# Git
+.git
+.gitignore
+README.md
+
+# Visual Studio
+.vs
+.vscode
+.idea
+
+# Build output
+**/bin/
+**/obj/
+**/out/
+
+# NuGet packages
+*.nupkg
+packages/
+
+# Test results
+TestResults/
+
+# User-specific files
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Ignore Docker and documentation files
+Dockerfile*
+.dockerignore
+*.md
+
+# OS files
+.DS_Store
+Thumbs.db

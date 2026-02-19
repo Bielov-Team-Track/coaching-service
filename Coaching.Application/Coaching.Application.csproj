@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Coaching.Domain\Coaching.Domain.csproj" />
+    <ProjectReference Include="..\shared\Shared.Contracts\Shared.Contracts.csproj" />
+    <ProjectReference Include="..\shared\Shared.Messaging.Contracts\Shared.Messaging.Contracts.csproj" />
+    <ProjectReference Include="..\shared\Shared.Messaging\Shared.Messaging.csproj" />
+    <ProjectReference Include="..\shared\Shared.DataAccess\Shared.DataAccess.csproj" />
+    <ProjectReference Include="..\shared\Shared.Services\Shared.Services.csproj" />
+    <ProjectReference Include="..\shared\Shared\Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AutoMapper" Version="14.0.0" />
+    <PackageReference Include="HtmlSanitizer" Version="9.0.892" />
+  </ItemGroup>
+
+</Project>

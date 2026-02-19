@@ -1,0 +1,60 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  build-and-test:
+    if: github.event_name == 'pull_request'
+    uses: Bielov-Team-Track/devops/.github/workflows/build-dotnet-service.yml@main
+    with:
+      service-name: coaching-service
+      service-path: '.'
+      project-name: Coaching
+      solution-file: Coaching.slnx
+      port: '5060'
+      run-tests: true
+      push-docker-image: false
+      build-migration-bundle: false
+    permissions:
+      contents: read
+
+  build-push:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: Bielov-Team-Track/devops/.github/workflows/build-dotnet-service.yml@main
+    with:
+      service-name: coaching-service
+      service-path: '.'
+      project-name: Coaching
+      solution-file: Coaching.slnx
+      port: '5060'
+      run-tests: true
+      push-docker-image: true
+      build-migration-bundle: true
+    permissions:
+      contents: read
+      packages: write
+
+  deploy-staging:
+    needs: build-push
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    uses: Bielov-Team-Track/devops/.github/workflows/deploy-service.yml@main
+    with:
+      service-name: coaching-service
+      environment: staging
+      has-migrations: true
+    secrets:
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_USER: ${{ secrets.SSH_USER }}
+      SSH_KEY: ${{ secrets.SSH_KEY }}
+      SSH_FINGERPRINT: ${{ secrets.SSH_FINGERPRINT }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+    permissions:
+      contents: read
+      actions: read

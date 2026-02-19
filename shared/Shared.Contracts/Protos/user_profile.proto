@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+option csharp_namespace = "Shared.Contracts.Grpc";
+
+package userprofile;
+
+service UserProfileService {
+  rpc CreateProfile (CreateProfileRequest) returns (CreateProfileResponse);
+}
+
+message CreateProfileRequest {
+  string user_id = 1;
+  string email = 2;
+  string display_name = 3;
+  string first_name = 4;
+  string last_name = 5;
+}
+
+message CreateProfileResponse {
+  bool success = 1;
+  string message = 2;
+  string profile_id = 3;
+}

@@ -1,0 +1,22 @@
+<Solution>
+  <Folder Name="/Shared Projects/">
+    <Project Path="shared/Shared.Contracts/Shared.Contracts.csproj" />
+    <Project Path="shared/Shared.DataAccess/Shared.DataAccess.csproj" />
+    <Project Path="shared/Shared.Logging/Shared.Logging.csproj" />
+    <Project Path="shared/Shared.Messaging.Contracts/Shared.Messaging.Contracts.csproj" />
+    <Project Path="shared/Shared.Messaging/Shared.Messaging.csproj" />
+    <Project Path="shared/Shared.Microservices/Shared.Microservices.csproj" />
+    <Project Path="shared/Shared.Services/Shared.Services.csproj" />
+    <Project Path="shared/Shared.Testing/Shared.Testing.csproj" />
+    <Project Path="shared/Shared.Tests/Shared.Tests.csproj" />
+    <Project Path="shared/Shared/Shared.csproj" />
+  </Folder>
+  <Folder Name="/Tests/">
+    <Project Path="Coaching.Tests.Integration/Coaching.Tests.Integration.csproj" />
+    <Project Path="Coaching.Tests.Unit/Coaching.Tests.Unit.csproj" />
+  </Folder>
+  <Project Path="Coaching.Application/Coaching.Application.csproj" />
+  <Project Path="Coaching.Domain/Coaching.Domain.csproj" />
+  <Project Path="Coaching.Infrastructure/Coaching.Infrastructure.csproj" />
+  <Project Path="Coaching/Coaching.csproj" />
+</Solution>

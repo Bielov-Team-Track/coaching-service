@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+option csharp_namespace = "Shared.Contracts.Grpc";
+
+package coaching;
+
+service CoachingInternalService {
+  rpc ValidateDrillExists (ValidateDrillExistsRequest) returns (ValidateDrillExistsResponse);
+  rpc GetDrillsList (GetDrillsListRequest) returns (GetDrillsListResponse);
+}
+
+message ValidateDrillExistsRequest {
+  string drill_id = 1;
+}
+
+message ValidateDrillExistsResponse {
+  bool exists = 1;
+  string drill_name = 2;
+  string category = 3;
+  int32 estimated_duration = 4;
+  string level = 5;
+}
+
+message GetDrillsListRequest {
+  repeated string drill_ids = 1;
+}
+
+message GetDrillsListResponse {
+  repeated DrillInfo drills = 1;
+}
+
+message DrillInfo {
+  string id = 1;
+  string name = 2;
+  string category = 3;
+  int32 estimated_duration = 4;
+  string level = 5;
+  string thumbnail_url = 6;
+}

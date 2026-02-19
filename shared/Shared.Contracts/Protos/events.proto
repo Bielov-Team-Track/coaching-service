@@ -1,0 +1,61 @@
+syntax = "proto3";
+
+option csharp_namespace = "Shared.Contracts.Grpc";
+
+package events;
+
+service EventsInternalService {
+  rpc IsEventAdmin (IsEventAdminRequest) returns (IsEventAdminResponse);
+  rpc IsEventParticipant (IsEventParticipantRequest) returns (IsEventParticipantResponse);
+  rpc GetEventParticipants (GetEventParticipantsRequest) returns (GetEventParticipantsResponse);
+  rpc GetEventContext (GetEventContextRequest) returns (GetEventContextResponse);
+}
+
+message IsEventAdminRequest {
+  string event_id = 1;
+  string user_id = 2;
+}
+
+message IsEventAdminResponse {
+  bool is_admin = 1;
+  string role = 2;
+}
+
+message IsEventParticipantRequest {
+  string event_id = 1;
+  string user_id = 2;
+}
+
+message IsEventParticipantResponse {
+  bool is_participant = 1;
+  bool event_exists = 2;
+}
+
+message GetEventParticipantsRequest {
+  string event_id = 1;
+  string role_filter = 2;
+  string status_filter = 3;
+}
+
+message GetEventParticipantsResponse {
+  repeated ParticipantInfo participants = 1;
+}
+
+message ParticipantInfo {
+  string user_id = 1;
+  string display_name = 2;
+  string role = 3;
+  string status = 4;
+  string avatar_url = 5;
+}
+
+message GetEventContextRequest {
+  string event_id = 1;
+}
+
+message GetEventContextResponse {
+  bool found = 1;
+  string event_type = 2;       // "TrainingSession", "Match", "Trial", "Evaluation", etc.
+  string context_type = 3;     // "None", "Club", "Group", "Team"
+  string context_id = 4;       // GUID of the club/group/team, empty if None
+}
