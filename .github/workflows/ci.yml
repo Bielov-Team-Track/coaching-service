@@ -2,9 +2,9 @@ name: CI/CD
 
 on:
   push:
-    branches: [main]
+    branches: [main, development]
   pull_request:
-    branches: [main]
+    branches: [main, development]
 
 permissions: {}
 
@@ -25,7 +25,7 @@ jobs:
       contents: read
 
   build-push:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push'
     uses: Bielov-Team-Track/devops/.github/workflows/build-dotnet-service.yml@main
     with:
       service-name: coaching-service
@@ -42,19 +42,26 @@ jobs:
 
   deploy-staging:
     needs: build-push
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/development' && github.event_name == 'push'
     uses: Bielov-Team-Track/devops/.github/workflows/deploy-service.yml@main
     with:
       service-name: coaching-service
       environment: staging
       has-migrations: true
-    secrets:
-      SSH_HOST: ${{ secrets.SSH_HOST }}
-      SSH_USER: ${{ secrets.SSH_USER }}
-      SSH_KEY: ${{ secrets.SSH_KEY }}
-      SSH_FINGERPRINT: ${{ secrets.SSH_FINGERPRINT }}
-      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+    secrets: inherit
+    permissions:
+      contents: read
+      actions: read
+
+  deploy-production:
+    needs: build-push
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    uses: Bielov-Team-Track/devops/.github/workflows/deploy-service.yml@main
+    with:
+      service-name: coaching-service
+      environment: production
+      has-migrations: true
+    secrets: inherit
     permissions:
       contents: read
       actions: read
