@@ -4,9 +4,9 @@
     "net10.0": {
       "AWSSDK.Core": {
         "type": "Direct",
-        "requested": "[4.0.3.8, )",
-        "resolved": "4.0.3.8",
-        "contentHash": "nJyNzaz3pcD8c8hZvtJXuziJm1dkd3/BYmZvhf1TPNfMo3G3lsesGFZl1UVyQhGEfmQOS+efT0H8tf00PMmjug=="
+        "requested": "[4.0.3.12, )",
+        "resolved": "4.0.3.12",
+        "contentHash": "/FyE96xV2qJLgJN++ZW8M7udRf2NBLoku9AkEHLQqpH9uv0r0QQK2sw2pF3OvzKnuKsyp+Mx5wYwgFXPLnBb9g=="
       },
       "AWSSDK.Extensions.NETCore.Setup": {
         "type": "Direct",
@@ -31,11 +31,11 @@
       },
       "AWSSDK.SimpleEmailV2": {
         "type": "Direct",
-        "requested": "[4.0.5.1, )",
-        "resolved": "4.0.5.1",
-        "contentHash": "nulOaaXiw54AxIzdyj5dnbY8mQoEbQGlf/PJoguarzEgGQ6W11Ve9+ofz/1hvxWRxR6AOh7LPD6LJCKlyzMEYQ==",
+        "requested": "[4.0.11.5, )",
+        "resolved": "4.0.11.5",
+        "contentHash": "NCid0P/maAfc1lemnbC6siw0fBDq6n+ZMr+ST0fiPQdhhEnuUwECV5zDU8bVCy8s6BCT9erp/vMNU160SxhW4A==",
         "dependencies": {
-          "AWSSDK.Core": "[4.0.0.26, 5.0.0)"
+          "AWSSDK.Core": "[4.0.3.12, 5.0.0)"
         }
       },
       "Grpc.Net.Client": {
