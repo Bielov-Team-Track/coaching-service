@@ -6,8 +6,6 @@ on:
   pull_request:
     branches: [main, development]
 
-permissions: {}
-
 jobs:
   build-and-test:
     if: github.event_name == 'pull_request'
@@ -21,8 +19,6 @@ jobs:
       run-tests: true
       push-docker-image: false
       build-migration-bundle: false
-    permissions:
-      contents: read
 
   build-push:
     if: github.event_name == 'push'
@@ -49,9 +45,6 @@ jobs:
       environment: staging
       has-migrations: true
     secrets: inherit
-    permissions:
-      contents: read
-      actions: read
 
   deploy-production:
     needs: build-push
@@ -62,6 +55,3 @@ jobs:
       environment: production
       has-migrations: true
     secrets: inherit
-    permissions:
-      contents: read
-      actions: read
