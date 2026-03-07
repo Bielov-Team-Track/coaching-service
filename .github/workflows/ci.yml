@@ -19,6 +19,7 @@ jobs:
       run-tests: true
       push-docker-image: false
       build-migration-bundle: false
+    secrets: inherit
 
   build-push:
     if: github.event_name == 'push'
@@ -32,6 +33,7 @@ jobs:
       run-tests: true
       push-docker-image: true
       build-migration-bundle: true
+    secrets: inherit
     permissions:
       contents: read
       packages: write
