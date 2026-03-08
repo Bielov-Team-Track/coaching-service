@@ -1,0 +1,60 @@
+## .NET service .gitignore
+## Based on https://github.com/github/gitignore/blob/main/Dotnet.gitignore
+
+# IDE / tooling
+.vs/
+.claude/
+.serena/
+
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+coveragereport/
+
+# .NET Core
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# ASP.NET Scaffolding
+ScaffoldingReadMe.txt
+
+# NuGet Packages
+*.nupkg
+*.snupkg
+
+# Temp and backup files
+~$*
+*~
+*.tmp
+*.bak
+
+# MSBuild Binary and Structured Log
+*.binlog
+
+# Test Results
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+*.VisualState.xml
+TestResult.xml
+nunit-*.xml
+CodeCoverage/
+
+# Configuration files with sensitive information
+appsettings.Development.json
+appsettings.Production.json
+appsettings.Local.json
+*.Development.*
+.env
