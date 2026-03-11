@@ -3,10 +3,8 @@ using Coaching.Application.DTOs.Feedback;
 using Coaching.Application.Interfaces.Repositories;
 using Coaching.Application.Interfaces.Services;
 using Coaching.Domain.Models.Feedback;
-using Ganss.Xss;
 using Microsoft.EntityFrameworkCore;
 using Shared.DataAccess.Repositories.Interfaces;
-using Shared.Enums;
 using Shared.Exceptions;
 
 namespace Coaching.Application.Services;
@@ -18,59 +16,12 @@ public class FeedbackService(
     IRepository<ImprovementPointMedia> mediaRepository,
     IRepository<Praise> praiseRepository,
     IRepository<Coaching.Domain.Models.Drills.Drill> drillRepository,
-    IFeedbackAuthorizationService authorizationService,
     IMapper mapper) : IFeedbackService
 {
-    private static readonly HtmlSanitizer _htmlSanitizer = CreateSanitizer();
-
-    private static HtmlSanitizer CreateSanitizer()
-    {
-        var sanitizer = new HtmlSanitizer();
-        sanitizer.AllowedTags.Clear();
-        sanitizer.AllowedTags.UnionWith(new[]
-        {
-            "p", "br", "strong", "em", "u", "s", "a",
-            "ul", "ol", "li", "h1", "h2", "h3",
-            "blockquote", "code", "pre"
-        });
-        sanitizer.AllowedAttributes.Clear();
-        sanitizer.AllowedAttributes.UnionWith(new[] { "href", "target", "rel" });
-        sanitizer.AllowedSchemes.Clear();
-        sanitizer.AllowedSchemes.UnionWith(new[] { "http", "https" });
-        return sanitizer;
-    }
-
     public async Task<FeedbackDto> CreateAsync(CreateFeedbackDto request, Guid coachUserId)
     {
-        // Validate authorization before creating.
-        // ValidateCreateAsync returns the resolved ClubId from event context (if event-linked)
-        // so we don't need to call GetEventContextAsync again.
-        var resolvedClubId = await authorizationService.ValidateCreateAsync(request, coachUserId);
-
-        // For event-linked feedback, set ClubId from the resolved event context automatically
-        if (resolvedClubId.HasValue)
-            request = request with { ClubId = resolvedClubId.Value };
-
         var feedback = mapper.Map<Feedback>(request);
         feedback.CoachUserId = coachUserId;
-
-        if (!string.IsNullOrEmpty(feedback.Content))
-        {
-            // Gate 1: Raw input size check BEFORE sanitization
-            if (feedback.Content.Length > 100_000)
-                throw new BadRequestException("Feedback content is too large", ErrorCodeEnum.ValidationError);
-
-            // Sanitize HTML to prevent stored XSS
-            feedback.Content = _htmlSanitizer.Sanitize(feedback.Content);
-
-            // Gate 2: Post-sanitization length check
-            if (feedback.Content.Length > 50_000)
-                throw new BadRequestException("Feedback content exceeds maximum length of 50,000 characters", ErrorCodeEnum.ValidationError);
-
-            feedback.ContentPlainText = StripHtml(feedback.Content);
-            // Phase A: Keep Comment in sync for backward compat / rollback
-            feedback.Comment = feedback.ContentPlainText;
-        }
 
         feedbackRepository.Add(feedback);
         await feedbackRepository.SaveChangesAsync();
@@ -118,25 +69,7 @@ public class FeedbackService(
         if (feedback.CoachUserId != userId)
             throw new ForbiddenException("Only the coach can update this feedback");
 
-        // Handle content update from either Content or Comment field (Phase A compat)
-        var newContent = request.Content ?? request.Comment;
-        if (newContent != null)
-        {
-            // Gate 1: Raw input size check before sanitization
-            if (newContent.Length > 100_000)
-                throw new BadRequestException("Feedback content is too large", ErrorCodeEnum.ValidationError);
-
-            feedback.Content = _htmlSanitizer.Sanitize(newContent);
-
-            // Gate 2: Post-sanitization length check
-            if (feedback.Content.Length > 50_000)
-                throw new BadRequestException("Feedback content exceeds maximum length of 50,000 characters", ErrorCodeEnum.ValidationError);
-
-            feedback.ContentPlainText = StripHtml(feedback.Content);
-            // Phase A: Keep Comment in sync
-            feedback.Comment = feedback.ContentPlainText;
-        }
-
+        if (request.Comment != null) feedback.Comment = request.Comment;
         if (request.SharedWithPlayer.HasValue) feedback.SharedWithPlayer = request.SharedWithPlayer.Value;
 
         feedbackRepository.Update(feedback);
@@ -459,14 +392,5 @@ public class FeedbackService(
             }
             await mediaRepository.SaveChangesAsync();
         }
-    }
-
-    private static string? StripHtml(string? html)
-    {
-        if (string.IsNullOrWhiteSpace(html)) return null;
-        var doc = new AngleSharp.Html.Parser.HtmlParser().ParseDocument(html);
-        var text = doc.Body?.TextContent ?? "";
-        text = System.Text.RegularExpressions.Regex.Replace(text, @"\s+", " ").Trim();
-        return text.Length > 4000 ? text[..4000] : text;
     }
 }

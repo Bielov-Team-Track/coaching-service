@@ -13,9 +13,7 @@ public class PlanCommentRepository : BaseRepository<PlanComment>, IPlanCommentRe
     public async Task<PlanComment?> GetByIdWithDetailsAsync(Guid id)
     {
         return await _dbSet
-            .Include(c => c.User)
             .Include(c => c.Replies.Where(r => !r.IsDeleted))
-                .ThenInclude(r => r.User)
             .FirstOrDefaultAsync(c => c.Id == id && !c.IsDeleted);
     }
 
@@ -23,11 +21,8 @@ public class PlanCommentRepository : BaseRepository<PlanComment>, IPlanCommentRe
     {
         var query = _dbSet
             .Where(c => c.TemplateId == templateId && c.ParentCommentId == null && !c.IsDeleted)
-            .Include(c => c.User)
             .Include(c => c.Replies.Where(r => !r.IsDeleted))
-                .ThenInclude(r => r.User)
-            .OrderByDescending(c => c.CreatedAt)
-            .ThenByDescending(c => c.Id);
+            .OrderByDescending(c => c.CreatedAt);
 
         if (cursor.HasValue)
         {
@@ -36,7 +31,7 @@ public class PlanCommentRepository : BaseRepository<PlanComment>, IPlanCommentRe
             {
                 query = (IOrderedQueryable<PlanComment>)query
                     .Where(c => c.CreatedAt < cursorComment.CreatedAt ||
-                               (c.CreatedAt == cursorComment.CreatedAt && c.Id < cursorComment.Id));
+                               (c.CreatedAt == cursorComment.CreatedAt && c.Id != cursor.Value));
             }
         }
 

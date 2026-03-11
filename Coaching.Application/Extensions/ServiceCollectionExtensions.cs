@@ -30,9 +30,6 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IEvaluationExerciseService, EvaluationExerciseService>();
         services.AddScoped<IEvaluationPlanService, EvaluationPlanService>();
         services.AddScoped<IEvaluationSessionService, EvaluationSessionService>();
-        services.AddScoped<IEvaluationSessionLifecycleService, EvaluationSessionLifecycleService>();
-        services.AddScoped<IEvaluationGroupService, EvaluationGroupService>();
-        services.AddScoped<IEvaluationScoringService, EvaluationScoringService>();
         services.AddScoped<IPlayerEvaluationService, PlayerEvaluationService>();
         services.AddScoped<IScoreCalculationService, ScoreCalculationService>();
         services.AddScoped<IThresholdService, ThresholdService>();
@@ -40,7 +37,6 @@ public static class ServiceCollectionExtensions
 
         // Feedback services
         services.AddScoped<IFeedbackService, FeedbackService>();
-        services.AddScoped<IFeedbackAuthorizationService, FeedbackAuthorizationService>();
         services.AddScoped<IBadgeService, BadgeService>();
         return services;
     }

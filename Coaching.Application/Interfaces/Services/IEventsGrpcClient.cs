@@ -1,9 +1,12 @@
 namespace Coaching.Application.Interfaces.Services;
 
 /// <summary>
-/// Event context information returned from events-service
+/// Event context returned from events-service for authorization decisions.
 /// </summary>
-public record EventContext(string EventType, string ContextType, Guid? ContextId);
+public record EventContext(
+    string EventType,
+    string ContextType,
+    Guid? ContextId);
 
 /// <summary>
 /// gRPC client for authorization checks against events-service.
@@ -21,8 +24,8 @@ public interface IEventsGrpcClient
     Task<(bool IsParticipant, bool EventExists)> IsEventParticipantAsync(Guid eventId, Guid userId);
 
     /// <summary>
-    /// Get event metadata (type, context type, context ID) for authorization decisions.
-    /// Returns null if the event doesn't exist.
+    /// Get the context of an event (type, context type, context ID) for authorization.
+    /// Returns null if the event does not exist.
     /// </summary>
     Task<EventContext?> GetEventContextAsync(Guid eventId);
 }

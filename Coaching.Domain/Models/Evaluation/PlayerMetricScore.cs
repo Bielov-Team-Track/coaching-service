@@ -13,5 +13,4 @@ public class PlayerMetricScore : BaseEntity
 
     public virtual PlayerEvaluation Evaluation { get; set; } = null!;
     public virtual EvaluationMetric Metric { get; set; } = null!;
-    public virtual PlayerExerciseScore? ExerciseScore { get; set; }
 }

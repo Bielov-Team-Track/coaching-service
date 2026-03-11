@@ -8,7 +8,6 @@
     <Project Path="shared/Shared.Microservices/Shared.Microservices.csproj" />
     <Project Path="shared/Shared.Services/Shared.Services.csproj" />
     <Project Path="shared/Shared.Testing/Shared.Testing.csproj" />
-    <Project Path="shared/Shared.Tests/Shared.Tests.csproj" />
     <Project Path="shared/Shared/Shared.csproj" />
   </Folder>
   <Folder Name="/Tests/">

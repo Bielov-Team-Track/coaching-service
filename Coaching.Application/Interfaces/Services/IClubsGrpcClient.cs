@@ -33,19 +33,14 @@ public interface IClubsGrpcClient
     Task<SkillMatrixInfo?> GetSkillMatrixByIdAsync(Guid matrixId);
 
     /// <summary>
-    /// Check if a user has a coaching role (HeadCoach or Owner) at the club level.
-    /// Uses the existing CheckUserClubRoles gRPC method.
-    ///
-    /// Note: ClubRole enum only has HeadCoach (not Coach or AssistantCoach — those exist
-    /// only at Team/Group level). Owner is included because club owners should be able
-    /// to give feedback to their club members.
-    /// </summary>
-    Task<bool> IsUserCoachInClubAsync(Guid userId, Guid clubId);
-
-    /// <summary>
-    /// Check if a user is an active member of a specific club.
+    /// Check whether a user is an active member of a club (any role).
     /// </summary>
     Task<bool> IsUserClubMemberAsync(Guid userId, Guid clubId);
+
+    /// <summary>
+    /// Check whether a user has a coaching role (HeadCoach or Owner) in a club.
+    /// </summary>
+    Task<bool> IsUserCoachInClubAsync(Guid userId, Guid clubId);
 }
 
 /// <summary>

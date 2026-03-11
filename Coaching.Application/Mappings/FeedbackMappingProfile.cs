@@ -18,14 +18,8 @@ public class FeedbackMappingProfile : Profile
         CreateMap<CreateFeedbackDto, Feedback>()
             .ForMember(d => d.Id, opt => opt.Ignore())
             .ForMember(d => d.CoachUserId, opt => opt.Ignore())
-            .ForMember(d => d.ContentPlainText, opt => opt.Ignore())
-            .ForMember(d => d.Evaluation, opt => opt.Ignore())
             .ForMember(d => d.ImprovementPoints, opt => opt.Ignore())
-            .ForMember(d => d.Praise, opt => opt.Ignore())
-            // Phase A: If Content is null but Comment is provided (old client), use Comment as Content
-            .ForMember(d => d.Content, opt => opt.MapFrom(s => s.Content ?? s.Comment))
-            // Phase A: Keep Comment column in sync for rollback safety
-            .ForMember(d => d.Comment, opt => opt.Ignore()); // Set in service after sanitization
+            .ForMember(d => d.Praise, opt => opt.Ignore());
 
         CreateMap<CreateImprovementPointDto, ImprovementPoint>()
             .ForMember(d => d.Id, opt => opt.Ignore())

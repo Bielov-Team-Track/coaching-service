@@ -43,6 +43,6 @@ public interface ITrainingPlanService
 
     // Comments
     Task<PlanCommentDto> CreateCommentAsync(Guid planId, CreatePlanCommentDto request, Guid userId);
-    Task<PlanCommentsResponseDto> GetCommentsAsync(Guid planId, Guid? cursor, int limit, Guid userId);
+    Task<PlanCommentsResponseDto> GetCommentsAsync(Guid planId, Guid? cursor, int limit);
     Task DeleteCommentAsync(Guid planId, Guid commentId, Guid userId);
 }

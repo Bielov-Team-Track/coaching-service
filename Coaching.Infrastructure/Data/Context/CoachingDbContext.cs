@@ -43,9 +43,6 @@ public class CoachingDbContext : BaseDbContext
     public DbSet<PlayerEvaluation> PlayerEvaluations => Set<PlayerEvaluation>();
     public DbSet<PlayerMetricScore> PlayerMetricScores => Set<PlayerMetricScore>();
     public DbSet<PlayerSkillScore> PlayerSkillScores => Set<PlayerSkillScore>();
-    public DbSet<EvaluationGroup> EvaluationGroups => Set<EvaluationGroup>();
-    public DbSet<EvaluationGroupPlayer> EvaluationGroupPlayers => Set<EvaluationGroupPlayer>();
-    public DbSet<PlayerExerciseScore> PlayerExerciseScores => Set<PlayerExerciseScore>();
 
     // Feedback
     public DbSet<Feedback> Feedbacks => Set<Feedback>();

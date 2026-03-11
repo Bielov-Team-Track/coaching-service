@@ -29,19 +29,21 @@ public enum VolleyballSkill
 public enum EvaluationSessionStatus
 {
     Draft = 0,
-    Running = 1,
-    Paused = 2,
-    Completed = 3
-}
-
-public enum EvaluationScoreStatus
-{
-    Pending = 0,
-    Scored = 1
+    InProgress = 1,
+    Completed = 2,
+    Running = 3,
+    Paused = 4
 }
 
 public enum ParticipantSource
 {
     Manual = 0,
     EventParticipant = 1
+}
+
+public enum EvaluationScoreStatus
+{
+    Pending = 0,
+    Scored = 1,
+    Skipped = 2
 }

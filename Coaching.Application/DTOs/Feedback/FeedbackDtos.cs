@@ -8,15 +8,8 @@ public class FeedbackDto
     public Guid RecipientUserId { get; set; }
     public Guid CoachUserId { get; set; }
     public Guid? EventId { get; set; }
-    public Guid? ClubId { get; set; }
-    public Guid? EvaluationId { get; set; }
-    public string? Content { get; set; }
-    public string? ContentPlainText { get; set; }
-    public bool SharedWithPlayer { get; set; }
-
-    // Phase A backward compat: keep Comment in response
     public string? Comment { get; set; }
-
+    public bool SharedWithPlayer { get; set; }
     public List<ImprovementPointDto> ImprovementPoints { get; set; } = new();
     public PraiseDto? Praise { get; set; }
     public DateTime? CreatedAt { get; set; }
@@ -57,13 +50,10 @@ public record CreateFeedbackDto
     public Guid RecipientUserId { get; set; }
     public Guid? EventId { get; set; }
     public Guid? ClubId { get; set; }
-    public string? Content { get; set; }
+    public string? Comment { get; set; }
     public bool SharedWithPlayer { get; set; }
     public List<CreateImprovementPointDto>? ImprovementPoints { get; set; }
     public CreatePraiseDto? Praise { get; set; }
-
-    // Phase A backward compat: accept "comment" from old frontend clients
-    public string? Comment { get; set; }
 }
 
 public record CreateImprovementPointDto
@@ -88,11 +78,8 @@ public record CreatePraiseDto
 
 public record UpdateFeedbackDto
 {
-    public string? Content { get; set; }
-    public bool? SharedWithPlayer { get; set; }
-
-    // Phase A backward compat
     public string? Comment { get; set; }
+    public bool? SharedWithPlayer { get; set; }
 }
 
 public record AddImprovementPointDto

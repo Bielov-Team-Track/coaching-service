@@ -94,8 +94,6 @@ namespace Coaching
             services.AddScoped<IEvaluationSessionRepository, EvaluationSessionRepository>();
             services.AddScoped<IEvaluationParticipantRepository, EvaluationParticipantRepository>();
             services.AddScoped<IPlayerEvaluationRepository, PlayerEvaluationRepository>();
-            services.AddScoped<IEvaluationGroupRepository, EvaluationGroupRepository>();
-            services.AddScoped<IPlayerExerciseScoreRepository, PlayerExerciseScoreRepository>();
 
             // gRPC Clients
             var clubsGrpcAddress = Configuration["GrpcClients:ClubsService"] ?? "http://clubs-service:5021";
@@ -165,38 +163,10 @@ namespace Coaching
                             ValidateLifetime = true,
                             ClockSkew = TimeSpan.Zero
                         };
-                        options.Events = new JwtBearerEvents
-                        {
-                            OnMessageReceived = context =>
-                            {
-                                var accessToken = context.Request.Query["access_token"];
-                                var path = context.HttpContext.Request.Path;
-                                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
-                                {
-                                    context.Token = accessToken;
-                                }
-                                return Task.CompletedTask;
-                            }
-                        };
                     });
             }
 
             services.AddAuthorization();
-
-            // SignalR
-            services.AddSignalR(options =>
-            {
-                options.EnableDetailedErrors = true;
-                options.KeepAliveInterval = TimeSpan.FromSeconds(15);
-                options.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
-            })
-            .AddJsonProtocol(options =>
-            {
-                options.PayloadSerializerOptions.ReferenceHandler =
-                    System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
-                options.PayloadSerializerOptions.Converters.Add(
-                    new System.Text.Json.Serialization.JsonStringEnumConverter());
-            });
 
             // Swagger
             services.AddEndpointsApiExplorer();
@@ -243,7 +213,6 @@ namespace Coaching
             app.UseEndpoints(endpoints =>
             {
                 endpoints.MapControllers();
-                endpoints.MapHub<Coaching.Hubs.EvaluationHub>("/hubs/evaluation");
                 endpoints.MapGrpcService<Grpc.CoachingInternalServiceImpl>();
                 endpoints.MapHealthChecks("/health");
                 endpoints.MapGrpcHealthChecksService();

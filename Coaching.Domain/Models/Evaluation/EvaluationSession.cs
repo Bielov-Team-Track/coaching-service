@@ -12,11 +12,11 @@ public class EvaluationSession : BaseEntity
     public string Title { get; set; } = string.Empty;
     public string? Description { get; set; }
     public EvaluationSessionStatus Status { get; set; } = EvaluationSessionStatus.Draft;
-    public bool ShareFeedback { get; set; }
-    public bool ShareMetrics { get; set; }
     public DateTime? StartedAt { get; set; }
     public DateTime? PausedAt { get; set; }
     public DateTime? CompletedAt { get; set; }
+    public bool ShareFeedback { get; set; }
+    public bool ShareMetrics { get; set; }
 
     public virtual EvaluationPlan? EvaluationPlan { get; set; }
     public virtual ICollection<EvaluationParticipant> Participants { get; set; } = new List<EvaluationParticipant>();

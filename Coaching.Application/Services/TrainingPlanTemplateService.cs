@@ -935,11 +935,11 @@ public class TrainingPlanService : ITrainingPlanService
 
     public async Task<PlanCommentDto> CreateCommentAsync(Guid planId, CreatePlanCommentDto request, Guid userId)
     {
+        await ValidateIsTemplate(planId);
+
         var plan = await _planRepository.GetByIdAsync(planId);
         if (plan == null)
             throw new EntityNotFoundException("Plan not found");
-
-        await AuthorizePlanCommentAccess(plan, userId);
 
         if (string.IsNullOrWhiteSpace(request.Content))
             throw new BadRequestException("Comment content is required", ErrorCodeEnum.ValidationError);
@@ -948,7 +948,7 @@ public class TrainingPlanService : ITrainingPlanService
         if (request.ParentCommentId.HasValue)
         {
             var parentComment = await _commentRepository.GetByIdAsync(request.ParentCommentId.Value);
-            if (parentComment == null || parentComment.TemplateId != planId || parentComment.IsDeleted)
+            if (parentComment == null || parentComment.TemplateId != planId)
                 throw new BadRequestException("Parent comment not found", ErrorCodeEnum.EntityNotFound);
         }
 
@@ -968,17 +968,13 @@ public class TrainingPlanService : ITrainingPlanService
         return _mapper.Map<PlanCommentDto>(createdComment);
     }
 
-    public async Task<PlanCommentsResponseDto> GetCommentsAsync(Guid planId, Guid? cursor, int limit, Guid userId)
+    public async Task<PlanCommentsResponseDto> GetCommentsAsync(Guid planId, Guid? cursor, int limit)
     {
-        limit = Math.Clamp(limit, 1, 100);
-
         var plan = await _planRepository.GetByIdAsync(planId);
         if (plan == null)
             throw new EntityNotFoundException("Plan not found");
 
-        await AuthorizePlanCommentAccess(plan, userId);
-
-        var comments = (await _commentRepository.GetByTemplateWithCursorAsync(planId, cursor, limit)).ToList();
+        var comments = (await _commentRepository.GetByTemplateWithCursorAsync(planId, cursor, limit + 1)).ToList();
         var hasMore = comments.Count > limit;
 
         if (hasMore)
@@ -1002,27 +998,8 @@ public class TrainingPlanService : ITrainingPlanService
         if (comment == null || comment.TemplateId != planId)
             throw new EntityNotFoundException("Comment not found");
 
-        // Authorize plan access before revealing any ownership details
-        var plan = await _planRepository.GetByIdAsync(comment.TemplateId);
-        if (plan == null)
-            throw new EntityNotFoundException("Plan not found");
-
-        await AuthorizePlanCommentAccess(plan, userId);
-
         if (comment.UserId != userId)
-        {
-            // Allow plan owner to moderate comments
-            var canModerate = plan.CreatedByUserId == userId;
-
-            // For Instance plans, also allow event admins to moderate
-            if (!canModerate && plan.PlanType == PlanType.Instance && plan.EventId != null)
-            {
-                canModerate = await _eventsGrpcClient.IsEventAdminAsync(plan.EventId.Value, userId);
-            }
-
-            if (!canModerate)
-                throw new ForbiddenException("You can only delete your own comments");
-        }
+            throw new ForbiddenException("Only the comment author can delete this comment");
 
         // Soft delete
         comment.IsDeleted = true;
@@ -1033,27 +1010,6 @@ public class TrainingPlanService : ITrainingPlanService
     // =========================================================================
     // HELPER METHODS
     // =========================================================================
-
-    /// <summary>
-    /// Authorizes comment access based on plan type.
-    /// Instance plans: user must be a participant of the linked event.
-    /// Template plans: open access (public templates are commentable by anyone).
-    /// </summary>
-    private async Task AuthorizePlanCommentAccess(TrainingPlan plan, Guid userId)
-    {
-        if (plan.PlanType == PlanType.Instance)
-        {
-            if (plan.EventId == null)
-                throw new BadRequestException("Instance plan has no linked event", ErrorCodeEnum.ValidationError);
-
-            var (isParticipant, eventExists) = await _eventsGrpcClient.IsEventParticipantAsync(plan.EventId.Value, userId);
-            if (!eventExists)
-                throw new EntityNotFoundException("The linked event no longer exists");
-            if (!isParticipant)
-                throw new ForbiddenException("Only event participants can comment on this plan");
-        }
-        // Template plans: open access, no additional check needed
-    }
 
     /// <summary>
     /// Validates that the plan exists and is a Template (not an Instance).
@@ -1128,9 +1084,6 @@ public class TrainingPlanService : ITrainingPlanService
                 SectionCount = plan.Sections?.Count ?? 0,
                 DrillCount = plan.Items?.Count ?? 0
             });
-
-            // Flush the EF outbox so the message is persisted and delivered
-            await _planRepository.SaveChangesAsync();
         }
         catch (Exception ex)
         {

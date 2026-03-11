@@ -106,21 +106,8 @@ public class ClubsGrpcClient : IClubsGrpcClient
         return null;
     }
 
-    // Club-level roles that grant coaching/feedback authority.
-    private static readonly HashSet<string> CoachRoles = new(StringComparer.OrdinalIgnoreCase)
+    public async Task<bool> IsUserClubMemberAsync(Guid userId, Guid clubId)
     {
-        "HeadCoach", "Owner"
-    };
-
-    private record ClubRolesResult(bool IsMember, bool IsCoach);
-
-    private async Task<ClubRolesResult> GetClubRolesAsync(Guid userId, Guid clubId)
-    {
-        var cacheKey = $"club_roles_{clubId}_{userId}";
-
-        if (_cache.TryGetValue(cacheKey, out ClubRolesResult? cached))
-            return cached!;
-
         try
         {
             var response = await _grpcClient.CheckUserClubRolesAsync(new CheckUserClubRolesRequest
@@ -128,31 +115,33 @@ public class ClubsGrpcClient : IClubsGrpcClient
                 UserId = userId.ToString(),
                 ClubId = clubId.ToString()
             });
-
-            var result = new ClubRolesResult(
-                response.IsMember,
-                response.IsMember && response.Roles.Any(r => CoachRoles.Contains(r)));
-
-            _cache.Set(cacheKey, result, CacheDuration);
-            return result;
+            return response.IsMember;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to check club roles via gRPC for user {UserId} in club {ClubId}", userId, clubId);
-            throw;
+            _logger.LogError(ex, "Failed to check club membership via gRPC for user {UserId}, club {ClubId}",
+                userId, clubId);
+            return false;
         }
     }
 
     public async Task<bool> IsUserCoachInClubAsync(Guid userId, Guid clubId)
     {
-        var roles = await GetClubRolesAsync(userId, clubId);
-        return roles.IsCoach;
-    }
-
-    public async Task<bool> IsUserClubMemberAsync(Guid userId, Guid clubId)
-    {
-        var roles = await GetClubRolesAsync(userId, clubId);
-        return roles.IsMember;
+        try
+        {
+            var response = await _grpcClient.CheckUserClubRolesAsync(new CheckUserClubRolesRequest
+            {
+                UserId = userId.ToString(),
+                ClubId = clubId.ToString()
+            });
+            return response.Roles.Any(r => r == "HeadCoach" || r == "Owner");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to check coach role via gRPC for user {UserId}, club {ClubId}",
+                userId, clubId);
+            return false;
+        }
     }
 
     private static SkillMatrixInfo MapToSkillMatrixInfo(GetSkillMatrixResponse response)

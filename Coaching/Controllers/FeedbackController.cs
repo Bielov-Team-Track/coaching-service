@@ -11,16 +11,11 @@ namespace Coaching.Controllers;
 public class FeedbackController : Shared.Microservices.Controllers.BaseApiController
 {
     private readonly IFeedbackService _feedbackService;
-    private readonly IFeedbackAuthorizationService _authorizationService;
 
-    public FeedbackController(
-        IFeedbackService feedbackService,
-        IFeedbackAuthorizationService authorizationService,
-        IJwtPayloadProvider jwtPayloadProvider)
+    public FeedbackController(IFeedbackService feedbackService, IJwtPayloadProvider jwtPayloadProvider)
         : base(jwtPayloadProvider)
     {
         _feedbackService = feedbackService;
-        _authorizationService = authorizationService;
     }
 
     [HttpGet("feedback/{id:guid}")]
@@ -40,35 +35,9 @@ public class FeedbackController : Shared.Microservices.Controllers.BaseApiContro
         return Ok(feedbacks);
     }
 
-    /// <summary>
-    /// Lightweight authorization check: can the current user create feedback?
-    /// Returns only a boolean — denial reasons are logged server-side.
-    /// </summary>
-    [HttpGet("feedback/can-create")]
-    public async Task<IActionResult> CanCreate(
-        [FromQuery] Guid recipientUserId,
-        [FromQuery] Guid? eventId = null,
-        [FromQuery] Guid? clubId = null)
-    {
-        CheckIsUserLoggedIn();
-
-        var request = new CreateFeedbackDto
-        {
-            RecipientUserId = recipientUserId,
-            EventId = eventId,
-            ClubId = clubId
-        };
-
-        var canCreate = await _authorizationService.CanCreateAsync(request, JwtPayload.UserId);
-        return Ok(new { canCreate });
-    }
-
     [HttpGet("me/feedback/received")]
     public async Task<IActionResult> GetReceivedFeedback([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
-        // Prevent unbounded result sets
-        pageSize = Math.Clamp(pageSize, 1, 100);
-
         CheckIsUserLoggedIn();
         var result = await _feedbackService.GetReceivedFeedbackAsync(JwtPayload.UserId, page, pageSize);
         return Ok(result);
@@ -77,9 +46,6 @@ public class FeedbackController : Shared.Microservices.Controllers.BaseApiContro
     [HttpGet("me/feedback/given")]
     public async Task<IActionResult> GetGivenFeedback([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
-        // Prevent unbounded result sets
-        pageSize = Math.Clamp(pageSize, 1, 100);
-
         CheckIsUserLoggedIn();
         var result = await _feedbackService.GetGivenFeedbackAsync(JwtPayload.UserId, page, pageSize);
         return Ok(result);
