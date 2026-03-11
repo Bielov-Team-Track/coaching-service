@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/dotnet/sdk:10.0-alpine AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 RUN dotnet tool install --tool-path /tools Docker.HealthCheck --version 1.10.0
@@ -13,7 +13,7 @@ COPY Coaching.Domain/packages.lock.json Coaching.Domain/
 COPY Coaching.Infrastructure/Coaching.Infrastructure.csproj Coaching.Infrastructure/
 COPY Coaching.Infrastructure/packages.lock.json Coaching.Infrastructure/
 COPY shared/ shared/
-RUN dotnet restore Coaching/Coaching.csproj --locked-mode
+RUN dotnet restore Coaching/Coaching.csproj
 
 COPY . .
 RUN dotnet publish Coaching/Coaching.csproj --no-restore -c Release -o /app/publish
