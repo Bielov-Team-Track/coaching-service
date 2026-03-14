@@ -54,6 +54,14 @@
           "Microsoft.Extensions.Options": "8.0.0"
         }
       },
+      "AWSSDK.CloudFront": {
+        "type": "Transitive",
+        "resolved": "4.0.5",
+        "contentHash": "rT/KqoyYCmGqblfxh83rJZVSaDje0+6/jjyWwsNH+rPk8be+Rxzi7ShxzThXtdNHO0KFSGcrVbhV2eF0hGM5gw==",
+        "dependencies": {
+          "AWSSDK.Core": "[4.0.0.26, 5.0.0)"
+        }
+      },
       "AWSSDK.Core": {
         "type": "Transitive",
         "resolved": "4.0.3.8",
@@ -886,6 +894,7 @@
       "shared.services": {
         "type": "Project",
         "dependencies": {
+          "AWSSDK.CloudFront": "[4.0.4.2, )",
           "AWSSDK.Core": "[4.0.3.8, )",
           "AWSSDK.Extensions.NETCore.Setup": "[4.0.3, )",
           "AWSSDK.S3": "[4.0.7.1, )",

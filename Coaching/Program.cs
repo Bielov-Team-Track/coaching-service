@@ -1,5 +1,4 @@
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.Hosting;
+using Shared.Logging.Extensions;
 
 namespace Coaching
 {
@@ -12,9 +11,12 @@ namespace Coaching
 
         public static IHostBuilder CreateHostBuilder(string[] args) =>
             Host.CreateDefaultBuilder(args)
+                .UseSharedSerilog()
                 .ConfigureWebHostDefaults(webBuilder =>
                 {
-                    webBuilder.UseStartup<Startup>();
+                    webBuilder
+                        .UseStartup<Startup>()
+                        .UseSharedSentry();
                 });
     }
 }
