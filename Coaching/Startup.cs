@@ -20,6 +20,7 @@ using Shared.Services.Extensions;
 using System.Text;
 using Shared.Middleware;
 using Shared.Extensions;
+using Shared.Microservices.Extensions;
 
 namespace Coaching
 {
@@ -189,11 +190,15 @@ namespace Coaching
 
             // Health checks
             services.AddHealthChecks();
+            services.AddPrometheusMetrics(Configuration);
         }
 
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
         {
             app.UseCors("AllowFrontend");
+
+            // Prometheus HTTP request metrics
+            app.UsePrometheusMetrics();
 
             if (env.IsDevelopment())
             {
