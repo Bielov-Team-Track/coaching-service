@@ -194,10 +194,7 @@ namespace Coaching
             services.AddPrometheusMetrics(Configuration);
             services.AddTracing(Configuration, "coaching-service", tracing =>
             {
-                tracing.AddEntityFrameworkCoreInstrumentation(options =>
-                {
-                    options.SetDbStatementForText = false;
-                });
+                tracing.AddEntityFrameworkCoreInstrumentation();
                 tracing.AddGrpcClientInstrumentation();
             });
         }
