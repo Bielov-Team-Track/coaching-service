@@ -191,6 +191,14 @@ namespace Coaching
             // Health checks
             services.AddHealthChecks();
             services.AddPrometheusMetrics(Configuration);
+            services.AddTracing(Configuration, "coaching-service", tracing =>
+            {
+                tracing.AddEntityFrameworkCoreInstrumentation(options =>
+                {
+                    options.SetDbStatementForText = false;
+                });
+                tracing.AddGrpcClientInstrumentation();
+            });
         }
 
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
