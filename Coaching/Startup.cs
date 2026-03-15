@@ -21,6 +21,7 @@ using System.Text;
 using Shared.Middleware;
 using Shared.Extensions;
 using Shared.Microservices.Extensions;
+using OpenTelemetry.Trace;
 
 namespace Coaching
 {
