@@ -22,6 +22,7 @@ jobs:
       run-tests: true
       push-docker-image: false
       build-migration-bundle: false
+      environment: ${{ github.ref == 'refs/heads/development' && 'staging' || github.ref == 'refs/heads/main' && 'production' || '' }}
     secrets: inherit
 
   build-push:
@@ -40,6 +41,7 @@ jobs:
       run-tests: false
       push-docker-image: true
       build-migration-bundle: true
+      environment: ${{ github.ref == 'refs/heads/development' && 'staging' || github.ref == 'refs/heads/main' && 'production' || '' }}
       telegram-message-id: ${{ needs.build-and-test.outputs.telegram-message-id }}
       telegram-message-lines: ${{ needs.build-and-test.outputs.telegram-message-lines }}
     secrets: inherit
@@ -55,6 +57,7 @@ jobs:
       service-path: '.'
       project-name: Coaching
       solution-file: Coaching.slnx
+      environment: production
       telegram-message-id: ${{ needs.build-push.outputs.telegram-message-id }}
       telegram-message-lines: ${{ needs.build-push.outputs.telegram-message-lines }}
     secrets:
