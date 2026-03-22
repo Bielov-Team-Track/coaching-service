@@ -3,9 +3,12 @@ using Coaching.Application.DTOs.Feedback;
 using Coaching.Application.Interfaces.Repositories;
 using Coaching.Application.Interfaces.Services;
 using Coaching.Domain.Models.Feedback;
+using Ganss.Xss;
 using Microsoft.EntityFrameworkCore;
 using Shared.DataAccess.Repositories.Interfaces;
+using Shared.Enums;
 using Shared.Exceptions;
+using Shared.Models;
 
 namespace Coaching.Application.Services;
 
@@ -16,12 +19,60 @@ public class FeedbackService(
     IRepository<ImprovementPointMedia> mediaRepository,
     IRepository<Praise> praiseRepository,
     IRepository<Coaching.Domain.Models.Drills.Drill> drillRepository,
+    IFeedbackAuthorizationService authorizationService,
+    IRepository<UserProfile> userProfileRepository,
     IMapper mapper) : IFeedbackService
 {
+    private static readonly HtmlSanitizer _htmlSanitizer = CreateSanitizer();
+
+    private static HtmlSanitizer CreateSanitizer()
+    {
+        var sanitizer = new HtmlSanitizer();
+        sanitizer.AllowedTags.Clear();
+        sanitizer.AllowedTags.UnionWith(new[]
+        {
+            "p", "br", "strong", "em", "u", "s", "a",
+            "ul", "ol", "li", "h1", "h2", "h3",
+            "blockquote", "code", "pre"
+        });
+        sanitizer.AllowedAttributes.Clear();
+        sanitizer.AllowedAttributes.UnionWith(new[] { "href", "target", "rel" });
+        sanitizer.AllowedSchemes.Clear();
+        sanitizer.AllowedSchemes.UnionWith(new[] { "http", "https" });
+        return sanitizer;
+    }
+
     public async Task<FeedbackDto> CreateAsync(CreateFeedbackDto request, Guid coachUserId)
     {
+        // Validate authorization before creating.
+        // ValidateCreateAsync returns the resolved ClubId from event context (if event-linked)
+        // so we don't need to call GetEventContextAsync again.
+        var resolvedClubId = await authorizationService.ValidateCreateAsync(request, coachUserId);
+
+        // For event-linked feedback, set ClubId from the resolved event context automatically
+        if (resolvedClubId.HasValue)
+            request = request with { ClubId = resolvedClubId.Value };
+
         var feedback = mapper.Map<Feedback>(request);
         feedback.CoachUserId = coachUserId;
+
+        if (!string.IsNullOrEmpty(feedback.Content))
+        {
+            // Gate 1: Raw input size check BEFORE sanitization
+            if (feedback.Content.Length > 100_000)
+                throw new BadRequestException("Feedback content is too large", ErrorCodeEnum.ValidationError);
+
+            // Sanitize HTML to prevent stored XSS
+            feedback.Content = _htmlSanitizer.Sanitize(feedback.Content);
+
+            // Gate 2: Post-sanitization length check
+            if (feedback.Content.Length > 50_000)
+                throw new BadRequestException("Feedback content exceeds maximum length of 50,000 characters", ErrorCodeEnum.ValidationError);
+
+            feedback.ContentPlainText = StripHtml(feedback.Content);
+            // Phase A: Keep Comment in sync for backward compat / rollback
+            feedback.Comment = feedback.ContentPlainText;
+        }
 
         feedbackRepository.Add(feedback);
         await feedbackRepository.SaveChangesAsync();
@@ -57,7 +108,9 @@ public class FeedbackService(
             return null;
         }
 
-        return mapper.Map<FeedbackDto>(feedback);
+        var dto = mapper.Map<FeedbackDto>(feedback);
+        await EnrichWithProfilesAsync(dto);
+        return dto;
     }
 
     public async Task<FeedbackDto> UpdateAsync(Guid id, UpdateFeedbackDto request, Guid userId)
@@ -69,7 +122,25 @@ public class FeedbackService(
         if (feedback.CoachUserId != userId)
             throw new ForbiddenException("Only the coach can update this feedback");
 
-        if (request.Comment != null) feedback.Comment = request.Comment;
+        // Handle content update from either Content or Comment field (Phase A compat)
+        var newContent = request.Content ?? request.Comment;
+        if (newContent != null)
+        {
+            // Gate 1: Raw input size check before sanitization
+            if (newContent.Length > 100_000)
+                throw new BadRequestException("Feedback content is too large", ErrorCodeEnum.ValidationError);
+
+            feedback.Content = _htmlSanitizer.Sanitize(newContent);
+
+            // Gate 2: Post-sanitization length check
+            if (feedback.Content.Length > 50_000)
+                throw new BadRequestException("Feedback content exceeds maximum length of 50,000 characters", ErrorCodeEnum.ValidationError);
+
+            feedback.ContentPlainText = StripHtml(feedback.Content);
+            // Phase A: Keep Comment in sync
+            feedback.Comment = feedback.ContentPlainText;
+        }
+
         if (request.SharedWithPlayer.HasValue) feedback.SharedWithPlayer = request.SharedWithPlayer.Value;
 
         feedbackRepository.Update(feedback);
@@ -100,7 +171,9 @@ public class FeedbackService(
             f.CoachUserId == requestingUserId ||
             (f.RecipientUserId == requestingUserId && f.SharedWithPlayer));
 
-        return mapper.Map<IEnumerable<FeedbackDto>>(accessible);
+        var items = mapper.Map<IEnumerable<FeedbackDto>>(accessible);
+        await EnrichWithProfilesAsync(items);
+        return items;
     }
 
     public async Task<FeedbackListResponseDto> GetReceivedFeedbackAsync(Guid userId, int page = 1, int pageSize = 20)
@@ -109,9 +182,12 @@ public class FeedbackService(
         var total = await feedbackRepository.Query()
             .CountAsync(f => f.RecipientUserId == userId && f.SharedWithPlayer && !f.IsDeleted);
 
+        var items = mapper.Map<IEnumerable<FeedbackDto>>(feedbacks);
+        await EnrichWithProfilesAsync(items);
+
         return new FeedbackListResponseDto
         {
-            Items = mapper.Map<IEnumerable<FeedbackDto>>(feedbacks),
+            Items = items,
             TotalCount = total,
             Page = page,
             PageSize = pageSize
@@ -124,9 +200,12 @@ public class FeedbackService(
         var total = await feedbackRepository.Query()
             .CountAsync(f => f.CoachUserId == userId && !f.IsDeleted);
 
+        var items = mapper.Map<IEnumerable<FeedbackDto>>(feedbacks);
+        await EnrichWithProfilesAsync(items);
+
         return new FeedbackListResponseDto
         {
-            Items = mapper.Map<IEnumerable<FeedbackDto>>(feedbacks),
+            Items = items,
             TotalCount = total,
             Page = page,
             PageSize = pageSize
@@ -392,5 +471,49 @@ public class FeedbackService(
             }
             await mediaRepository.SaveChangesAsync();
         }
+    }
+
+    private async Task EnrichWithProfilesAsync(IEnumerable<FeedbackDto> feedbacks)
+    {
+        var userIds = feedbacks
+            .SelectMany(f => new[] { f.RecipientUserId, f.CoachUserId })
+            .Where(id => id != Guid.Empty)
+            .Distinct()
+            .ToList();
+
+        if (userIds.Count == 0) return;
+
+        var profiles = await userProfileRepository.Query()
+            .Where(p => userIds.Contains(p.Id))
+            .Select(p => new { p.Id, p.Name, p.Surname, p.ImageUrl })
+            .ToDictionaryAsync(p => p.Id, p => p);
+
+        foreach (var feedback in feedbacks)
+        {
+            if (profiles.TryGetValue(feedback.RecipientUserId, out var recipient))
+            {
+                feedback.RecipientName = $"{recipient.Name ?? ""} {recipient.Surname ?? ""}".Trim();
+                feedback.RecipientImageUrl = recipient.ImageUrl;
+            }
+            if (profiles.TryGetValue(feedback.CoachUserId, out var coach))
+            {
+                feedback.CoachName = $"{coach.Name ?? ""} {coach.Surname ?? ""}".Trim();
+                feedback.CoachImageUrl = coach.ImageUrl;
+            }
+        }
+    }
+
+    private async Task EnrichWithProfilesAsync(FeedbackDto feedback)
+    {
+        await EnrichWithProfilesAsync(new[] { feedback });
+    }
+
+    private static string? StripHtml(string? html)
+    {
+        if (string.IsNullOrWhiteSpace(html)) return null;
+        var doc = new AngleSharp.Html.Parser.HtmlParser().ParseDocument(html);
+        var text = doc.Body?.TextContent ?? "";
+        text = System.Text.RegularExpressions.Regex.Replace(text, @"\s+", " ").Trim();
+        return text.Length > 4000 ? text[..4000] : text;
     }
 }

@@ -246,7 +246,8 @@ public class PlansController : Shared.Microservices.Controllers.BaseApiControlle
     [HttpGet("plans/{id:guid}/comments")]
     public async Task<IActionResult> GetComments([FromRoute] Guid id, [FromQuery] Guid? cursor, [FromQuery] int limit = 20)
     {
-        var result = await _planService.GetCommentsAsync(id, cursor, limit);
+        CheckIsUserLoggedIn();
+        var result = await _planService.GetCommentsAsync(id, cursor, limit, JwtPayload.UserId);
         return Ok(result);
     }
 
