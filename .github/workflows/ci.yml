@@ -46,8 +46,6 @@ jobs:
       push-docker-image: true
       build-migration-bundle: true
       environment: ${{ github.ref == 'refs/heads/development' && 'staging' || github.ref == 'refs/heads/main' && 'production' || '' }}
-      telegram-message-id: ${{ needs.build-and-test.outputs.telegram-message-id }}
-      telegram-message-lines: ${{ needs.build-and-test.outputs.telegram-message-lines }}
     secrets: inherit
 
   integration-tests:
@@ -62,11 +60,6 @@ jobs:
       project-name: Coaching
       solution-file: Coaching.slnx
       environment: ${{ github.ref == 'refs/heads/development' && 'staging' || 'production' }}
-      telegram-message-id: ${{ needs.build-push.outputs.telegram-message-id }}
-      telegram-message-lines: ${{ needs.build-push.outputs.telegram-message-lines }}
-    secrets:
-      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
 
   deploy-staging:
     needs: [build-push, integration-tests]
@@ -78,15 +71,11 @@ jobs:
       service-name: coaching-service
       environment: staging
       has-migrations: true
-      telegram-message-id: ${{ needs.integration-tests.outputs.telegram-message-id || needs.build-push.outputs.telegram-message-id }}
-      telegram-message-lines: ${{ needs.integration-tests.outputs.telegram-message-lines || needs.build-push.outputs.telegram-message-lines }}
     secrets:
       SSH_HOST: ${{ secrets.SSH_HOST }}
       SSH_USER: ${{ secrets.SSH_USER }}
       SSH_KEY: ${{ secrets.SSH_KEY }}
       SSH_FINGERPRINT: ${{ secrets.SSH_FINGERPRINT }}
-      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
 
   deploy-production:
     needs: [build-push, integration-tests]
@@ -98,12 +87,8 @@ jobs:
       service-name: coaching-service
       environment: production
       has-migrations: true
-      telegram-message-id: ${{ needs.integration-tests.outputs.telegram-message-id || needs.build-push.outputs.telegram-message-id }}
-      telegram-message-lines: ${{ needs.integration-tests.outputs.telegram-message-lines || needs.build-push.outputs.telegram-message-lines }}
     secrets:
       SSH_HOST: ${{ secrets.SSH_HOST }}
       SSH_USER: ${{ secrets.SSH_USER }}
       SSH_KEY: ${{ secrets.SSH_KEY }}
       SSH_FINGERPRINT: ${{ secrets.SSH_FINGERPRINT }}
-      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
