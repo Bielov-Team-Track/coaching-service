@@ -71,11 +71,7 @@ jobs:
       service-name: coaching-service
       environment: staging
       has-migrations: true
-    secrets:
-      SSH_HOST: ${{ secrets.SSH_HOST }}
-      SSH_USER: ${{ secrets.SSH_USER }}
-      SSH_KEY: ${{ secrets.SSH_KEY }}
-      SSH_FINGERPRINT: ${{ secrets.SSH_FINGERPRINT }}
+    secrets: inherit
 
   deploy-production:
     needs: [build-push, integration-tests]
@@ -87,8 +83,4 @@ jobs:
       service-name: coaching-service
       environment: production
       has-migrations: true
-    secrets:
-      SSH_HOST: ${{ secrets.SSH_HOST }}
-      SSH_USER: ${{ secrets.SSH_USER }}
-      SSH_KEY: ${{ secrets.SSH_KEY }}
-      SSH_FINGERPRINT: ${{ secrets.SSH_FINGERPRINT }}
+    secrets: inherit
