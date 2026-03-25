@@ -149,6 +149,7 @@ namespace Coaching
             {
                 bus.AddConsumer<UserProfileUpdatedConsumer>();
                 bus.AddConsumer<EventDeletedConsumer>();
+                bus.AddConsumer<Coaching.Application.Consumers.UserDeletionConfirmedConsumer>();
             });
 
             if (jwtSettings != null)
