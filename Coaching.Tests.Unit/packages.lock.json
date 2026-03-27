@@ -17,8 +17,8 @@
       "FluentAssertions": {
         "type": "Direct",
         "requested": "[7.*, )",
-        "resolved": "7.2.1",
-        "contentHash": "MilqBF2lZrT0V1azIA6DG6I/snS0rG3A8ohT2Jjkhq6zOFk76nqx4BPnEnzrX6jFVa6xvkDU++z3PebCGZyJ4g==",
+        "resolved": "7.2.2",
+        "contentHash": "B6FJmtTadaqtLXH5qfn9hlYF5ruNOAdtjA9+1V3fuYp/MZzj7lB3Ys5cdgy72uv7w1GE5Y9PEX369UD3N1sfHg==",
         "dependencies": {
           "System.Configuration.ConfigurationManager": "6.0.0"
         }
@@ -94,12 +94,33 @@
           "Testcontainers": "4.9.0"
         }
       },
+      "AngleSharp": {
+        "type": "Transitive",
+        "resolved": "0.17.1",
+        "contentHash": "5MPI4bbixlwxb0W/smOMeIR+QlxMy5/5jD+WnIAw4pBC+7AhLPe5bS3cLgQMJyvd6q0A48sG+uYOt/ep406GLA=="
+      },
+      "AngleSharp.Css": {
+        "type": "Transitive",
+        "resolved": "0.17.0",
+        "contentHash": "bg0AcugmX6BFEi/DHG61QrwRU8iuiX4H8LZehdIzYdqOM/dgb3BsCTzNIcc1XADn4+xfQEdVwJYTSwUxroL4vg==",
+        "dependencies": {
+          "AngleSharp": "[0.17.0, 0.18.0)"
+        }
+      },
       "AutoMapper": {
         "type": "Transitive",
         "resolved": "14.0.0",
         "contentHash": "OC+1neAPM4oCCqQj3g2GJ2shziNNhOkxmNB9cVS8jtx4JbgmRzLcUOxB9Tsz6cVPHugdkHgCaCrTjjSI0Z5sCQ==",
         "dependencies": {
           "Microsoft.Extensions.Options": "8.0.0"
+        }
+      },
+      "AWSSDK.CloudFront": {
+        "type": "Transitive",
+        "resolved": "4.0.5",
+        "contentHash": "rT/KqoyYCmGqblfxh83rJZVSaDje0+6/jjyWwsNH+rPk8be+Rxzi7ShxzThXtdNHO0KFSGcrVbhV2eF0hGM5gw==",
+        "dependencies": {
+          "AWSSDK.Core": "[4.0.0.26, 5.0.0)"
         }
       },
       "AWSSDK.Core": {
@@ -188,6 +209,15 @@
         "contentHash": "v0c8R97TwRYwNXlC8GyRXwYTCNufpDfUtj9la+wUrZFzVWkFJuNAltU+c0yI3zu0jl54k7en6u2WKgZgd57r2Q==",
         "dependencies": {
           "Grpc.Core.Api": "2.71.0"
+        }
+      },
+      "HtmlSanitizer": {
+        "type": "Transitive",
+        "resolved": "9.0.892",
+        "contentHash": "zdkMmpNCjTkxna8Y+jmPIFm2st+HjHrf32yNElFYwe7L4GmDm+mdKR6TzDyf6ewJ0RUUz84D4IkHNgrwGi4VbQ==",
+        "dependencies": {
+          "AngleSharp": "[0.17.1]",
+          "AngleSharp.Css": "[0.17.0]"
         }
       },
       "MassTransit": {
@@ -972,6 +1002,7 @@
         "dependencies": {
           "AutoMapper": "[14.0.0, )",
           "Coaching.Domain": "[1.0.0, )",
+          "HtmlSanitizer": "[9.0.892, )",
           "Shared": "[1.0.0, )",
           "Shared.Contracts": "[1.0.0, )",
           "Shared.DataAccess": "[1.0.0, )",
@@ -1033,6 +1064,7 @@
       "shared.services": {
         "type": "Project",
         "dependencies": {
+          "AWSSDK.CloudFront": "[4.0.4.2, )",
           "AWSSDK.Core": "[4.0.3.8, )",
           "AWSSDK.Extensions.NETCore.Setup": "[4.0.3, )",
           "AWSSDK.S3": "[4.0.7.1, )",
