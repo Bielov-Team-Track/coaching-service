@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Coaching.Infrastructure.Migrations
 {
     [DbContext(typeof(CoachingDbContext))]
-    [Migration("20260327195559_PendingModelSync")]
+    [Migration("20260327201312_PendingModelSync")]
     partial class PendingModelSync
     {
         /// <inheritdoc />
