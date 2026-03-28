@@ -225,7 +225,7 @@ namespace Coaching
             services.AddPrometheusMetrics(Configuration);
             services.AddTracing(Configuration, "coaching-service", tracing =>
             {
-                tracing.AddEntityFrameworkCoreInstrumentation();
+                tracing.AddFilteredEfCoreInstrumentation();
                 tracing.AddGrpcClientInstrumentation();
             });
         }
