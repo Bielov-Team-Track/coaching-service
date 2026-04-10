@@ -189,7 +189,7 @@ namespace Coaching
             // SignalR
             services.AddSignalR(options =>
             {
-                options.EnableDetailedErrors = true;
+                options.EnableDetailedErrors = Environment.IsDevelopment();
                 options.KeepAliveInterval = TimeSpan.FromSeconds(15);
                 options.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
             })
