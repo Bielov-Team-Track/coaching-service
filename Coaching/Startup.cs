@@ -44,6 +44,9 @@ namespace Coaching
                     options.SerializerSettings.ContractResolver = new Newtonsoft.Json.Serialization.CamelCasePropertyNamesContractResolver();
                     options.SerializerSettings.ReferenceLoopHandling = Newtonsoft.Json.ReferenceLoopHandling.Ignore;
                     options.SerializerSettings.Converters.Add(new Newtonsoft.Json.Converters.StringEnumConverter());
+                    // Replace collections from the request body instead of appending to
+                    // pre-populated defaults on the DTO (Newtonsoft's Auto mode appends).
+                    options.SerializerSettings.ObjectCreationHandling = Newtonsoft.Json.ObjectCreationHandling.Replace;
                 });
 
             services.ConfigureProblemDetailsValidation();
