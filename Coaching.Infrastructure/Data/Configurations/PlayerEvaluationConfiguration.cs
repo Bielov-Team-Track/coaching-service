@@ -31,5 +31,15 @@ public class PlayerEvaluationConfiguration : IEntityTypeConfiguration<PlayerEval
             .WithOne(s => s.Evaluation)
             .HasForeignKey(s => s.EvaluationId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasOne(e => e.Session)
+            .WithMany()
+            .HasForeignKey(e => e.SessionId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        builder.HasOne(e => e.Feedback)
+            .WithMany()
+            .HasForeignKey(e => e.FeedbackId)
+            .OnDelete(DeleteBehavior.SetNull);
     }
 }

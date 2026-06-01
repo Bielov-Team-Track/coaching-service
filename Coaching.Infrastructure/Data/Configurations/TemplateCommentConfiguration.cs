@@ -23,5 +23,10 @@ public class PlanCommentConfiguration : IEntityTypeConfiguration<PlanComment>
             .WithMany(c => c.Replies)
             .HasForeignKey(c => c.ParentCommentId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(c => c.User)
+            .WithMany()
+            .HasForeignKey(c => c.UserId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

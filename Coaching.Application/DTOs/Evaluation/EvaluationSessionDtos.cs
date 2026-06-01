@@ -12,8 +12,14 @@ public class EvaluationSessionDto
     public string Title { get; set; } = string.Empty;
     public string? Description { get; set; }
     public EvaluationSessionStatus Status { get; set; }
+    public bool ShareFeedback { get; set; }
+    public bool ShareMetrics { get; set; }
+    public DateTime? StartedAt { get; set; }
+    public DateTime? PausedAt { get; set; }
+    public DateTime? CompletedAt { get; set; }
     public EvaluationPlanDto? EvaluationPlan { get; set; }
     public List<EvaluationParticipantDto> Participants { get; set; } = new();
+    public List<EvaluationGroupDto> Groups { get; set; } = new();
     public DateTime? CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
 }

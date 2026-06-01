@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main, development]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions: {}
 
 jobs:
@@ -42,13 +46,11 @@ jobs:
       push-docker-image: true
       build-migration-bundle: true
       environment: ${{ github.ref == 'refs/heads/development' && 'staging' || github.ref == 'refs/heads/main' && 'production' || '' }}
-      telegram-message-id: ${{ needs.build-and-test.outputs.telegram-message-id }}
-      telegram-message-lines: ${{ needs.build-and-test.outputs.telegram-message-lines }}
     secrets: inherit
 
   integration-tests:
     needs: build-push
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.event_name == 'push'
     uses: Bielov-Team-Track/devops/.github/workflows/integration-tests.yml@main
     permissions:
       contents: read
@@ -57,16 +59,11 @@ jobs:
       service-path: '.'
       project-name: Coaching
       solution-file: Coaching.slnx
-      environment: production
-      telegram-message-id: ${{ needs.build-push.outputs.telegram-message-id }}
-      telegram-message-lines: ${{ needs.build-push.outputs.telegram-message-lines }}
-    secrets:
-      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      environment: ${{ github.ref == 'refs/heads/development' && 'staging' || 'production' }}
 
   deploy-staging:
-    needs: build-push
-    if: github.ref == 'refs/heads/development' && github.event_name == 'push'
+    needs: [build-push, integration-tests]
+    if: always() && github.ref == 'refs/heads/development' && github.event_name == 'push' && needs.build-push.result == 'success' && (needs.integration-tests.result == 'success' || needs.integration-tests.result == 'skipped')
     uses: Bielov-Team-Track/devops/.github/workflows/deploy-service.yml@main
     permissions:
       contents: read
@@ -74,15 +71,7 @@ jobs:
       service-name: coaching-service
       environment: staging
       has-migrations: true
-      telegram-message-id: ${{ needs.build-push.outputs.telegram-message-id }}
-      telegram-message-lines: ${{ needs.build-push.outputs.telegram-message-lines }}
-    secrets:
-      SSH_HOST: ${{ secrets.SSH_HOST }}
-      SSH_USER: ${{ secrets.SSH_USER }}
-      SSH_KEY: ${{ secrets.SSH_KEY }}
-      SSH_FINGERPRINT: ${{ secrets.SSH_FINGERPRINT }}
-      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+    secrets: inherit
 
   deploy-production:
     needs: [build-push, integration-tests]
@@ -94,12 +83,4 @@ jobs:
       service-name: coaching-service
       environment: production
       has-migrations: true
-      telegram-message-id: ${{ needs.integration-tests.outputs.telegram-message-id || needs.build-push.outputs.telegram-message-id }}
-      telegram-message-lines: ${{ needs.integration-tests.outputs.telegram-message-lines || needs.build-push.outputs.telegram-message-lines }}
-    secrets:
-      SSH_HOST: ${{ secrets.SSH_HOST }}
-      SSH_USER: ${{ secrets.SSH_USER }}
-      SSH_KEY: ${{ secrets.SSH_KEY }}
-      SSH_FINGERPRINT: ${{ secrets.SSH_FINGERPRINT }}
-      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+    secrets: inherit

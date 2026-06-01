@@ -3,6 +3,7 @@ using System;
 using Coaching.Infrastructure.Data.Context;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Coaching.Infrastructure.Migrations
 {
     [DbContext(typeof(CoachingDbContext))]
-    partial class CoachingDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260321074434_SyncUserProfileModel")]
+    partial class SyncUserProfileModel
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -427,7 +430,7 @@ namespace Coaching.Infrastructure.Migrations
 
                     b.HasIndex("SessionId");
 
-                    b.ToTable("EvaluationGroups");
+                    b.ToTable("EvaluationGroup");
                 });
 
             modelBuilder.Entity("Coaching.Domain.Models.Evaluation.EvaluationGroupPlayer", b =>
@@ -456,7 +459,7 @@ namespace Coaching.Infrastructure.Migrations
                     b.HasIndex("GroupId", "PlayerId")
                         .IsUnique();
 
-                    b.ToTable("EvaluationGroupPlayers");
+                    b.ToTable("EvaluationGroupPlayer");
                 });
 
             modelBuilder.Entity("Coaching.Domain.Models.Evaluation.EvaluationMetric", b =>
@@ -772,9 +775,6 @@ namespace Coaching.Infrastructure.Migrations
                     b.Property<Guid>("EvaluationParticipantId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid?>("FeedbackId")
-                        .HasColumnType("uuid");
-
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
@@ -800,11 +800,7 @@ namespace Coaching.Infrastructure.Migrations
                     b.HasIndex("EvaluationParticipantId")
                         .IsUnique();
 
-                    b.HasIndex("FeedbackId");
-
                     b.HasIndex("PlayerId");
-
-                    b.HasIndex("SessionId");
 
                     b.ToTable("PlayerEvaluations");
                 });
@@ -851,7 +847,7 @@ namespace Coaching.Infrastructure.Migrations
                     b.HasIndex("SessionId", "PlayerId", "ExerciseId")
                         .IsUnique();
 
-                    b.ToTable("PlayerExerciseScores");
+                    b.ToTable("PlayerExerciseScore");
                 });
 
             modelBuilder.Entity("Coaching.Domain.Models.Evaluation.PlayerMetricScore", b =>
@@ -877,8 +873,7 @@ namespace Coaching.Infrastructure.Migrations
                         .HasColumnType("numeric(5,4)");
 
                     b.Property<string>("Notes")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+                        .HasColumnType("text");
 
                     b.Property<Guid?>("PlayerExerciseScoreId")
                         .HasColumnType("uuid");
@@ -953,31 +948,15 @@ namespace Coaching.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<Guid?>("ClubId")
-                        .HasColumnType("uuid");
-
                     b.Property<Guid>("CoachUserId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("Comment")
                         .HasMaxLength(4000)
-                        .HasColumnType("character varying(4000)")
-                        .HasColumnName("Comment");
-
-                    b.Property<string>("Content")
-                        .HasMaxLength(50000)
-                        .HasColumnType("character varying(50000)")
-                        .HasColumnName("Content");
-
-                    b.Property<string>("ContentPlainText")
-                        .HasMaxLength(4000)
                         .HasColumnType("character varying(4000)");
 
                     b.Property<DateTime?>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid?>("EvaluationId")
-                        .HasColumnType("uuid");
 
                     b.Property<Guid?>("EventId")
                         .HasColumnType("uuid");
@@ -996,11 +975,7 @@ namespace Coaching.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ClubId");
-
                     b.HasIndex("CoachUserId");
-
-                    b.HasIndex("EvaluationId");
 
                     b.HasIndex("EventId");
 
@@ -1872,21 +1847,7 @@ namespace Coaching.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("Coaching.Domain.Models.Feedback.Feedback", "Feedback")
-                        .WithMany()
-                        .HasForeignKey("FeedbackId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("Coaching.Domain.Models.Evaluation.EvaluationSession", "Session")
-                        .WithMany()
-                        .HasForeignKey("SessionId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.Navigation("Feedback");
-
                     b.Navigation("Participant");
-
-                    b.Navigation("Session");
                 });
 
             modelBuilder.Entity("Coaching.Domain.Models.Evaluation.PlayerExerciseScore", b =>
@@ -1922,14 +1883,11 @@ namespace Coaching.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("Coaching.Domain.Models.Evaluation.PlayerExerciseScore", "ExerciseScore")
+                    b.HasOne("Coaching.Domain.Models.Evaluation.PlayerExerciseScore", null)
                         .WithMany("MetricScores")
-                        .HasForeignKey("PlayerExerciseScoreId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .HasForeignKey("PlayerExerciseScoreId");
 
                     b.Navigation("Evaluation");
-
-                    b.Navigation("ExerciseScore");
 
                     b.Navigation("Metric");
                 });
@@ -1941,16 +1899,6 @@ namespace Coaching.Infrastructure.Migrations
                         .HasForeignKey("EvaluationId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("Evaluation");
-                });
-
-            modelBuilder.Entity("Coaching.Domain.Models.Feedback.Feedback", b =>
-                {
-                    b.HasOne("Coaching.Domain.Models.Evaluation.PlayerEvaluation", "Evaluation")
-                        .WithMany()
-                        .HasForeignKey("EvaluationId")
-                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Evaluation");
                 });
@@ -2044,7 +1992,7 @@ namespace Coaching.Infrastructure.Migrations
                     b.HasOne("Shared.Models.UserProfile", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("ParentComment");

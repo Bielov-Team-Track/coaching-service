@@ -6,7 +6,11 @@ public class FeedbackDto
 {
     public Guid Id { get; set; }
     public Guid RecipientUserId { get; set; }
+    public string? RecipientName { get; set; }
+    public string? RecipientImageUrl { get; set; }
     public Guid CoachUserId { get; set; }
+    public string? CoachName { get; set; }
+    public string? CoachImageUrl { get; set; }
     public Guid? EventId { get; set; }
     public string? Comment { get; set; }
     public bool SharedWithPlayer { get; set; }
@@ -50,6 +54,7 @@ public record CreateFeedbackDto
     public Guid RecipientUserId { get; set; }
     public Guid? EventId { get; set; }
     public Guid? ClubId { get; set; }
+    public string? Content { get; set; }
     public string? Comment { get; set; }
     public bool SharedWithPlayer { get; set; }
     public List<CreateImprovementPointDto>? ImprovementPoints { get; set; }
@@ -78,6 +83,7 @@ public record CreatePraiseDto
 
 public record UpdateFeedbackDto
 {
+    public string? Content { get; set; }
     public string? Comment { get; set; }
     public bool? SharedWithPlayer { get; set; }
 }

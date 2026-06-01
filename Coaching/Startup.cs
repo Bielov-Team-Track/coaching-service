@@ -44,6 +44,9 @@ namespace Coaching
                     options.SerializerSettings.ContractResolver = new Newtonsoft.Json.Serialization.CamelCasePropertyNamesContractResolver();
                     options.SerializerSettings.ReferenceLoopHandling = Newtonsoft.Json.ReferenceLoopHandling.Ignore;
                     options.SerializerSettings.Converters.Add(new Newtonsoft.Json.Converters.StringEnumConverter());
+                    // Replace collections from the request body instead of appending to
+                    // pre-populated defaults on the DTO (Newtonsoft's Auto mode appends).
+                    options.SerializerSettings.ObjectCreationHandling = Newtonsoft.Json.ObjectCreationHandling.Replace;
                 });
 
             services.ConfigureProblemDetailsValidation();
@@ -96,6 +99,8 @@ namespace Coaching
             services.AddScoped<IEvaluationSessionRepository, EvaluationSessionRepository>();
             services.AddScoped<IEvaluationParticipantRepository, EvaluationParticipantRepository>();
             services.AddScoped<IPlayerEvaluationRepository, PlayerEvaluationRepository>();
+            services.AddScoped<IEvaluationGroupRepository, EvaluationGroupRepository>();
+            services.AddScoped<IPlayerExerciseScoreRepository, PlayerExerciseScoreRepository>();
 
             // gRPC Clients
             var clubsGrpcAddress = Configuration["GrpcClients:ClubsService"] ?? "http://clubs-service:5021";
@@ -147,6 +152,7 @@ namespace Coaching
             {
                 bus.AddConsumer<UserProfileUpdatedConsumer>();
                 bus.AddConsumer<EventDeletedConsumer>();
+                bus.AddConsumer<Coaching.Application.Consumers.UserDeletionConfirmedConsumer>();
             });
 
             if (jwtSettings != null)
@@ -165,10 +171,38 @@ namespace Coaching
                             ValidateLifetime = true,
                             ClockSkew = TimeSpan.Zero
                         };
+                        options.Events = new JwtBearerEvents
+                        {
+                            OnMessageReceived = context =>
+                            {
+                                var accessToken = context.Request.Query["access_token"];
+                                var path = context.HttpContext.Request.Path;
+                                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
+                                {
+                                    context.Token = accessToken;
+                                }
+                                return Task.CompletedTask;
+                            }
+                        };
                     });
             }
 
             services.AddAuthorization();
+
+            // SignalR
+            services.AddSignalR(options =>
+            {
+                options.EnableDetailedErrors = Environment.IsDevelopment();
+                options.KeepAliveInterval = TimeSpan.FromSeconds(15);
+                options.ClientTimeoutInterval = TimeSpan.FromSeconds(30);
+            })
+            .AddJsonProtocol(options =>
+            {
+                options.PayloadSerializerOptions.ReferenceHandler =
+                    System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+                options.PayloadSerializerOptions.Converters.Add(
+                    new System.Text.Json.Serialization.JsonStringEnumConverter());
+            });
 
             // Swagger
             services.AddEndpointsApiExplorer();
@@ -194,7 +228,7 @@ namespace Coaching
             services.AddPrometheusMetrics(Configuration);
             services.AddTracing(Configuration, "coaching-service", tracing =>
             {
-                tracing.AddEntityFrameworkCoreInstrumentation();
+                tracing.AddFilteredEfCoreInstrumentation();
                 tracing.AddGrpcClientInstrumentation();
             });
         }
@@ -224,6 +258,7 @@ namespace Coaching
             app.UseEndpoints(endpoints =>
             {
                 endpoints.MapControllers();
+                endpoints.MapHub<Coaching.Hubs.EvaluationHub>("/hubs/evaluation");
                 endpoints.MapGrpcService<Grpc.CoachingInternalServiceImpl>();
                 endpoints.MapHealthChecks("/health");
                 endpoints.MapGrpcHealthChecksService();

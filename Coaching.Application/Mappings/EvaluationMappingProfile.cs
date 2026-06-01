@@ -64,5 +64,14 @@ public class EvaluationMappingProfile : Profile
 
         // Threshold mappings
         CreateMap<EvaluationThreshold, EvaluationThresholdDto>();
+
+        // Group mappings
+        CreateMap<EvaluationGroup, EvaluationGroupDto>();
+        CreateMap<EvaluationGroupPlayer, GroupPlayerDto>();
+
+        // Exercise score mappings
+        CreateMap<PlayerExerciseScore, PlayerExerciseScoreDto>();
+        CreateMap<PlayerMetricScore, MetricScoreValueDto>()
+            .ForMember(d => d.Value, opt => opt.MapFrom(s => s.RawValue));
     }
 }

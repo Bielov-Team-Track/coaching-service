@@ -18,6 +18,7 @@ x86/
 [Aa][Rr][Mm]64/
 bld/
 [Bb]in/
+**/bin\\*/
 [Oo]bj/
 [Ll]og/
 [Ll]ogs/
@@ -59,3 +60,5 @@ appsettings.Local.json
 *.Development.*
 .env
 
+bin/
+obj/

@@ -23,5 +23,13 @@ public class PlayerMetricScoreConfiguration : IEntityTypeConfiguration<PlayerMet
 
         builder.HasIndex(s => new { s.EvaluationId, s.MetricId })
             .IsUnique();
+
+        builder.HasOne(s => s.ExerciseScore)
+            .WithMany(es => es.MetricScores)
+            .HasForeignKey(s => s.PlayerExerciseScoreId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        builder.Property(s => s.Notes)
+            .HasMaxLength(500);
     }
 }
