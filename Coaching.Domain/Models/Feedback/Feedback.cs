@@ -21,5 +21,6 @@ public class Feedback : BaseEntity
 
     public virtual PlayerEvaluation? Evaluation { get; set; }
     public virtual ICollection<ImprovementPoint> ImprovementPoints { get; set; } = new List<ImprovementPoint>();
+    public virtual ICollection<FeedbackMedia> Media { get; set; } = new List<FeedbackMedia>();
     public virtual Praise? Praise { get; set; }
 }
