@@ -1,0 +1,70 @@
+using Asp.Versioning;
+using Coaching.Application.DTOs.Templates;
+using Coaching.Application.Interfaces.Services;
+using Microsoft.AspNetCore.Mvc;
+using Shared.DataAccess.Providers.Interfaces;
+
+namespace Coaching.Controllers.V1;
+
+[ApiVersion("1.0")]
+[Route("v{version:apiVersion}")]
+public class RunController : Shared.Microservices.Controllers.BaseApiController
+{
+    private readonly IRunService _runService;
+
+    public RunController(
+        IRunService runService,
+        IJwtPayloadProvider jwtPayloadProvider)
+        : base(jwtPayloadProvider)
+    {
+        _runService = runService;
+    }
+
+    [HttpGet("events/{eventId:guid}/plans/run")]
+    public async Task<IActionResult> GetRun([FromRoute] Guid eventId)
+    {
+        CheckIsUserLoggedIn();
+        var run = await _runService.GetByEventIdAsync(eventId, JwtPayload.UserId);
+        return Ok(run);
+    }
+
+    [HttpPost("events/{eventId:guid}/plans/run/start")]
+    public async Task<IActionResult> StartRun([FromRoute] Guid eventId)
+    {
+        CheckIsUserLoggedIn();
+        var run = await _runService.StartAsync(eventId, JwtPayload.UserId);
+        return Ok(run);
+    }
+
+    [HttpPost("events/{eventId:guid}/plans/run/pause")]
+    public async Task<IActionResult> PauseRun([FromRoute] Guid eventId)
+    {
+        CheckIsUserLoggedIn();
+        var run = await _runService.PauseAsync(eventId, JwtPayload.UserId);
+        return Ok(run);
+    }
+
+    [HttpPost("events/{eventId:guid}/plans/run/resume")]
+    public async Task<IActionResult> ResumeRun([FromRoute] Guid eventId)
+    {
+        CheckIsUserLoggedIn();
+        var run = await _runService.ResumeAsync(eventId, JwtPayload.UserId);
+        return Ok(run);
+    }
+
+    [HttpPost("events/{eventId:guid}/plans/run/advance")]
+    public async Task<IActionResult> AdvanceRun([FromRoute] Guid eventId, [FromBody] AdvanceRunDto request)
+    {
+        CheckIsUserLoggedIn();
+        var run = await _runService.AdvanceAsync(eventId, request.FromItemId, JwtPayload.UserId);
+        return Ok(run);
+    }
+
+    [HttpPost("events/{eventId:guid}/plans/run/complete")]
+    public async Task<IActionResult> CompleteRun([FromRoute] Guid eventId)
+    {
+        CheckIsUserLoggedIn();
+        var run = await _runService.CompleteAsync(eventId, JwtPayload.UserId);
+        return Ok(run);
+    }
+}
