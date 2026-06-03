@@ -96,7 +96,7 @@ public class RunService : IRunService
 
         if (run.Status == RunStatus.Running)
         {
-            run.CurrentItemPausedElapsedSeconds = ElapsedSeconds(run);
+            run.CurrentItemPausedElapsedSeconds = ElapsedSeconds(run, Now());
             run.CurrentItemStartedAtUtc = null;
             run.Status = RunStatus.Paused;
             await _runRepository.SaveChangesAsync();
@@ -132,8 +132,8 @@ public class RunService : IRunService
         FinalizeCurrentItem(run);
 
         var ordered = run.Items.OrderBy(i => i.Order).ToList();
-        var nextItem = ordered.FirstOrDefault(i => i.PlanItemId != fromItemId
-            && i.Order > ordered.First(c => c.PlanItemId == fromItemId).Order
+        var currentOrder = ordered.First(c => c.PlanItemId == fromItemId).Order;
+        var nextItem = ordered.FirstOrDefault(i => i.Order > currentOrder
             && i.CompletedAtUtc == null);
 
         var now = Now();
@@ -176,16 +176,17 @@ public class RunService : IRunService
         var current = run.Items.FirstOrDefault(i => i.PlanItemId == run.CurrentItemId);
         if (current == null) return;
 
-        current.ActualElapsedSeconds = ElapsedSeconds(run);
-        current.CompletedAtUtc = Now();
+        var now = Now();
+        current.ActualElapsedSeconds = ElapsedSeconds(run, now);
+        current.CompletedAtUtc = now;
     }
 
-    private int ElapsedSeconds(TrainingPlanRun run)
+    private static int ElapsedSeconds(TrainingPlanRun run, DateTime now)
     {
         if (run.Status == RunStatus.Paused || run.CurrentItemStartedAtUtc == null)
             return run.CurrentItemPausedElapsedSeconds;
 
-        var elapsed = (Now() - run.CurrentItemStartedAtUtc.Value).TotalSeconds;
+        var elapsed = (now - run.CurrentItemStartedAtUtc.Value).TotalSeconds;
         return elapsed < 0 ? 0 : (int)elapsed;
     }
 
