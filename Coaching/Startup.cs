@@ -89,6 +89,7 @@ namespace Coaching
             services.AddScoped<IPlanLikeRepository, PlanLikeRepository>();
             services.AddScoped<IPlanBookmarkRepository, PlanBookmarkRepository>();
             services.AddScoped<IPlanCommentRepository, PlanCommentRepository>();
+            services.AddScoped<ITrainingPlanRunRepository, TrainingPlanRunRepository>();
 
             // Feedback repositories
             services.AddScoped<IFeedbackRepository, FeedbackRepository>();
