@@ -72,7 +72,6 @@ public class FeedbackMediaUploadTests : UnitTestBase
     }
 
     [Test]
-    [Category("Unit")]
     public async Task GetMediaUploadUrl_RejectsDisallowedType()
     {
         // Arrange
@@ -89,7 +88,6 @@ public class FeedbackMediaUploadTests : UnitTestBase
     }
 
     [Test]
-    [Category("Unit")]
     public async Task GetMediaUploadUrl_RejectsOversizeImage()
     {
         // Arrange
@@ -106,7 +104,6 @@ public class FeedbackMediaUploadTests : UnitTestBase
     }
 
     [Test]
-    [Category("Unit")]
     public async Task GetMediaUploadUrl_ReturnsUrls_ForValidImage()
     {
         // Arrange
@@ -123,5 +120,23 @@ public class FeedbackMediaUploadTests : UnitTestBase
         // Assert
         result.UploadUrl.Should().NotBeNullOrEmpty();
         result.FileUrl.Should().NotBeNullOrEmpty();
+    }
+
+    [Test]
+    public async Task GetMediaUploadUrl_AcceptsImageAtExactSizeLimit()
+    {
+        // Arrange
+        var request = new FeedbackMediaUploadRequestDto
+        {
+            FileName = "limit.jpg",
+            ContentType = "image/jpeg",
+            FileSize = 10L * 1024 * 1024
+        };
+
+        // Act
+        var result = await _sut.GetMediaUploadUrlAsync(request, Guid.NewGuid());
+
+        // Assert
+        result.UploadUrl.Should().NotBeNullOrEmpty();
     }
 }

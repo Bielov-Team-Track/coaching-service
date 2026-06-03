@@ -46,6 +46,22 @@ public class FeedbackService(
         ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"] = 25L * 1024 * 1024,
     };
 
+    private static readonly Dictionary<string, string> ContentTypeExtensions = new()
+    {
+        ["image/jpeg"] = ".jpg",
+        ["image/png"] = ".png",
+        ["image/gif"] = ".gif",
+        ["image/webp"] = ".webp",
+        ["video/mp4"] = ".mp4",
+        ["video/quicktime"] = ".mov",
+        ["video/webm"] = ".webm",
+        ["application/pdf"] = ".pdf",
+        ["application/msword"] = ".doc",
+        ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"] = ".docx",
+        ["application/vnd.ms-excel"] = ".xls",
+        ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"] = ".xlsx",
+    };
+
     private static HtmlSanitizer CreateSanitizer()
     {
         var sanitizer = new HtmlSanitizer();
@@ -66,16 +82,18 @@ public class FeedbackService(
     public async Task<FeedbackMediaUploadResponseDto> GetMediaUploadUrlAsync(
         FeedbackMediaUploadRequestDto request, Guid coachUserId)
     {
-        if (!AllowedMediaTypes.TryGetValue(request.ContentType, out var maxSize))
+        var raw = request.ContentType?.Trim().ToLowerInvariant() ?? "";
+        var mimeType = raw.Contains(';') ? raw[..raw.IndexOf(';')].TrimEnd() : raw;
+        if (!AllowedMediaTypes.TryGetValue(mimeType, out var maxSize))
             throw new BadRequestException("Unsupported file type", ErrorCodeEnum.ValidationError);
         if (request.FileSize <= 0 || request.FileSize > maxSize)
             throw new BadRequestException("File exceeds the allowed size", ErrorCodeEnum.ValidationError);
 
         var mediaId = Guid.NewGuid();
-        var extension = Path.GetExtension(request.FileName);
+        var extension = ContentTypeExtensions[mimeType];
         var s3Key = $"feedback/{coachUserId}/{mediaId}{extension}";
 
-        var uploadUrl = await fileService.GetPresignedUploadLink(s3Key, s3Settings.Value.Bucket, request.ContentType);
+        var uploadUrl = await fileService.GetPresignedUploadLink(s3Key, s3Settings.Value.Bucket, mimeType);
         var fileUrl = fileService.GetPublicUrl(s3Key);
 
         return new FeedbackMediaUploadResponseDto { UploadUrl = uploadUrl, FileUrl = fileUrl };
