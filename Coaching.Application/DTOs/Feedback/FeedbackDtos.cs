@@ -49,6 +49,7 @@ public class FeedbackMediaDto
     public required string Url { get; set; }
     public FeedbackMediaType Type { get; set; }
     public string? Title { get; set; }
+    public int Order { get; set; }
 }
 
 public record CreateFeedbackMediaDto
