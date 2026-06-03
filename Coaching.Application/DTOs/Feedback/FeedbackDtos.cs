@@ -15,6 +15,7 @@ public class FeedbackDto
     public string? Comment { get; set; }
     public bool SharedWithPlayer { get; set; }
     public List<ImprovementPointDto> ImprovementPoints { get; set; } = new();
+    public List<FeedbackMediaDto> Attachments { get; set; } = new();
     public PraiseDto? Praise { get; set; }
     public DateTime? CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
@@ -42,6 +43,21 @@ public class ImprovementPointMediaDto
     public string? Title { get; set; }
 }
 
+public class FeedbackMediaDto
+{
+    public Guid Id { get; set; }
+    public required string Url { get; set; }
+    public FeedbackMediaType Type { get; set; }
+    public string? Title { get; set; }
+}
+
+public record CreateFeedbackMediaDto
+{
+    public required string Url { get; set; }
+    public FeedbackMediaType Type { get; set; }
+    public string? Title { get; set; }
+}
+
 public class PraiseDto
 {
     public Guid Id { get; set; }
@@ -58,6 +74,7 @@ public record CreateFeedbackDto
     public string? Comment { get; set; }
     public bool SharedWithPlayer { get; set; }
     public List<CreateImprovementPointDto>? ImprovementPoints { get; set; }
+    public List<CreateFeedbackMediaDto>? Attachments { get; set; }
     public CreatePraiseDto? Praise { get; set; }
 }
 

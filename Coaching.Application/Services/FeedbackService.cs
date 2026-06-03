@@ -17,6 +17,7 @@ public class FeedbackService(
     IRepository<ImprovementPoint> pointRepository,
     IRepository<ImprovementPointDrill> drillLinkRepository,
     IRepository<ImprovementPointMedia> mediaRepository,
+    IRepository<FeedbackMedia> feedbackMediaRepository,
     IRepository<Praise> praiseRepository,
     IRepository<Coaching.Domain.Models.Drills.Drill> drillRepository,
     IFeedbackAuthorizationService authorizationService,
@@ -92,6 +93,19 @@ public class FeedbackService(
             praise.FeedbackId = feedback.Id;
             praiseRepository.Add(praise);
             await praiseRepository.SaveChangesAsync();
+        }
+
+        if (request.Attachments != null)
+        {
+            var mediaOrder = 0;
+            foreach (var mediaDto in request.Attachments)
+            {
+                var media = mapper.Map<FeedbackMedia>(mediaDto);
+                media.FeedbackId = feedback.Id;
+                media.Order = mediaOrder++;
+                feedbackMediaRepository.Add(media);
+            }
+            await feedbackMediaRepository.SaveChangesAsync();
         }
 
         return await GetByIdAsync(feedback.Id, coachUserId) ?? throw new Exception("Failed to retrieve created feedback");
