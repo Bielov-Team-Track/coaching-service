@@ -18,16 +18,4 @@ public class TrainingRunHub : Hub
     }
 
     public static string GroupName(Guid eventId) => $"run_{eventId}";
-
-    private Guid GetUserId()
-    {
-        var userIdClaim = Context.User?.Claims.FirstOrDefault(c => c.Type == "userId")?.Value
-            ?? Context.User?.Claims.FirstOrDefault(c => c.Type == "nameid")?.Value
-            ?? Context.User?.Claims.FirstOrDefault(c => c.Type.Contains("nameidentifier"))?.Value;
-
-        if (!Guid.TryParse(userIdClaim, out var userId))
-            throw new HubException("Unauthorized");
-
-        return userId;
-    }
 }

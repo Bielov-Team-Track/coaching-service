@@ -160,6 +160,9 @@ public class RunService : IRunService
     {
         var (run, isCreator) = await LoadForControlAsync(eventId, requestingUserId);
 
+        if (run.Status == RunStatus.Completed)
+            return MapToDto(run, isCreator);
+
         FinalizeCurrentItem(run);
         run.Status = RunStatus.Completed;
         run.CurrentItemId = null;
