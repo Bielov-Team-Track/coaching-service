@@ -85,6 +85,14 @@ public class FeedbackController : Shared.Microservices.Controllers.BaseApiContro
         return Ok(result);
     }
 
+    [HttpPost("feedback/media/upload-url")]
+    public async Task<IActionResult> GetMediaUploadUrl([FromBody] FeedbackMediaUploadRequestDto request)
+    {
+        CheckIsUserLoggedIn();
+        var response = await _feedbackService.GetMediaUploadUrlAsync(request, JwtPayload.UserId);
+        return Ok(response);
+    }
+
     [HttpPost("feedback")]
     public async Task<IActionResult> Create([FromBody] CreateFeedbackDto request)
     {

@@ -125,6 +125,19 @@ public record UpdatePraiseDto
     public BadgeType? BadgeType { get; set; }
 }
 
+public class FeedbackMediaUploadRequestDto
+{
+    public required string FileName { get; set; }
+    public required string ContentType { get; set; }
+    public required long FileSize { get; set; }
+}
+
+public class FeedbackMediaUploadResponseDto
+{
+    public string UploadUrl { get; set; } = string.Empty;
+    public string FileUrl { get; set; } = string.Empty;
+}
+
 public class FeedbackListResponseDto
 {
     public IEnumerable<FeedbackDto> Items { get; set; } = new List<FeedbackDto>();

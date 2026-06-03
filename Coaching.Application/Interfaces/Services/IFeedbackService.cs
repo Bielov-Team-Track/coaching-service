@@ -4,6 +4,7 @@ namespace Coaching.Application.Interfaces.Services;
 
 public interface IFeedbackService
 {
+    Task<FeedbackMediaUploadResponseDto> GetMediaUploadUrlAsync(FeedbackMediaUploadRequestDto request, Guid coachUserId);
     Task<FeedbackDto> CreateAsync(CreateFeedbackDto request, Guid coachUserId);
     Task<FeedbackDto?> GetByIdAsync(Guid id, Guid requestingUserId);
     Task<FeedbackDto> UpdateAsync(Guid id, UpdateFeedbackDto request, Guid userId);

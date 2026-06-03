@@ -5,10 +5,13 @@ using Coaching.Application.Interfaces.Services;
 using Coaching.Domain.Models.Feedback;
 using Ganss.Xss;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Shared.DataAccess.Repositories.Interfaces;
 using Shared.Enums;
 using Shared.Exceptions;
 using Shared.Models;
+using Shared.Options;
+using Shared.Services.FileStorage.Intefaces;
 
 namespace Coaching.Application.Services;
 
@@ -22,9 +25,26 @@ public class FeedbackService(
     IRepository<Coaching.Domain.Models.Drills.Drill> drillRepository,
     IFeedbackAuthorizationService authorizationService,
     IRepository<UserProfile> userProfileRepository,
-    IMapper mapper) : IFeedbackService
+    IMapper mapper,
+    IFileService fileService,
+    IOptions<S3Settings> s3Settings) : IFeedbackService
 {
     private static readonly HtmlSanitizer _htmlSanitizer = CreateSanitizer();
+    private static readonly Dictionary<string, long> AllowedMediaTypes = new()
+    {
+        ["image/jpeg"] = 10L * 1024 * 1024,
+        ["image/png"] = 10L * 1024 * 1024,
+        ["image/gif"] = 10L * 1024 * 1024,
+        ["image/webp"] = 10L * 1024 * 1024,
+        ["video/mp4"] = 100L * 1024 * 1024,
+        ["video/quicktime"] = 100L * 1024 * 1024,
+        ["video/webm"] = 100L * 1024 * 1024,
+        ["application/pdf"] = 25L * 1024 * 1024,
+        ["application/msword"] = 25L * 1024 * 1024,
+        ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"] = 25L * 1024 * 1024,
+        ["application/vnd.ms-excel"] = 25L * 1024 * 1024,
+        ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"] = 25L * 1024 * 1024,
+    };
 
     private static HtmlSanitizer CreateSanitizer()
     {
@@ -41,6 +61,24 @@ public class FeedbackService(
         sanitizer.AllowedSchemes.Clear();
         sanitizer.AllowedSchemes.UnionWith(new[] { "http", "https" });
         return sanitizer;
+    }
+
+    public async Task<FeedbackMediaUploadResponseDto> GetMediaUploadUrlAsync(
+        FeedbackMediaUploadRequestDto request, Guid coachUserId)
+    {
+        if (!AllowedMediaTypes.TryGetValue(request.ContentType, out var maxSize))
+            throw new BadRequestException("Unsupported file type", ErrorCodeEnum.ValidationError);
+        if (request.FileSize <= 0 || request.FileSize > maxSize)
+            throw new BadRequestException("File exceeds the allowed size", ErrorCodeEnum.ValidationError);
+
+        var mediaId = Guid.NewGuid();
+        var extension = Path.GetExtension(request.FileName);
+        var s3Key = $"feedback/{coachUserId}/{mediaId}{extension}";
+
+        var uploadUrl = await fileService.GetPresignedUploadLink(s3Key, s3Settings.Value.Bucket, request.ContentType);
+        var fileUrl = fileService.GetPublicUrl(s3Key);
+
+        return new FeedbackMediaUploadResponseDto { UploadUrl = uploadUrl, FileUrl = fileUrl };
     }
 
     public async Task<FeedbackDto> CreateAsync(CreateFeedbackDto request, Guid coachUserId)
