@@ -30,6 +30,8 @@ public class CoachingDbContext : BaseDbContext
     public DbSet<PlanLike> PlanLikes => Set<PlanLike>();
     public DbSet<PlanBookmark> PlanBookmarks => Set<PlanBookmark>();
     public DbSet<PlanComment> PlanComments => Set<PlanComment>();
+    public DbSet<TrainingPlanRun> TrainingPlanRuns => Set<TrainingPlanRun>();
+    public DbSet<TrainingPlanRunItem> TrainingPlanRunItems => Set<TrainingPlanRunItem>();
 
     // Evaluation
     public DbSet<EvaluationExercise> EvaluationExercises => Set<EvaluationExercise>();
