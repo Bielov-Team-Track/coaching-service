@@ -25,6 +25,7 @@ public class RunController : Shared.Microservices.Controllers.BaseApiController
     {
         CheckIsUserLoggedIn();
         var run = await _runService.GetByEventIdAsync(eventId, JwtPayload.UserId);
+        if (run == null) return Content("null", "application/json");
         return Ok(run);
     }
 

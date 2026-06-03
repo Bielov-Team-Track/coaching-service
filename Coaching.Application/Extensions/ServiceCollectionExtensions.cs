@@ -25,6 +25,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<Shared.Services.IGuardianCacheService, CacheOnlyGuardianCacheService>();
         services.AddScoped<IDrillService, DrillService>();
         services.AddScoped<ITrainingPlanService, TrainingPlanService>();
+        services.AddScoped<IRunService, RunService>();
 
         // Evaluation services
         services.AddScoped<IEvaluationExerciseService, EvaluationExerciseService>();
