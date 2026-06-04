@@ -14,6 +14,7 @@ public class FeedbackDto
     public Guid? EventId { get; set; }
     public string? Comment { get; set; }
     public bool SharedWithPlayer { get; set; }
+    public DateTime? SeenAt { get; set; }
     public List<ImprovementPointDto> ImprovementPoints { get; set; } = new();
     public List<FeedbackMediaDto> Attachments { get; set; } = new();
     public PraiseDto? Praise { get; set; }

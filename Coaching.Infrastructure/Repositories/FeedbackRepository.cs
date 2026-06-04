@@ -61,4 +61,13 @@ public class FeedbackRepository : BaseRepository<Feedback>, IFeedbackRepository
             .OrderByDescending(f => f.CreatedAt)
             .ToListAsync();
     }
+
+    public async Task<int> GetUnseenCountAsync(Guid recipientUserId)
+    {
+        return await _dbSet
+            .CountAsync(f => f.RecipientUserId == recipientUserId
+                && f.SharedWithPlayer
+                && f.SeenAt == null
+                && !f.IsDeleted);
+    }
 }

@@ -27,7 +27,8 @@ public class FeedbackService(
     IRepository<UserProfile> userProfileRepository,
     IMapper mapper,
     IFileService fileService,
-    IOptions<S3Settings> s3Settings) : IFeedbackService
+    IOptions<S3Settings> s3Settings,
+    TimeProvider timeProvider) : IFeedbackService
 {
     private static readonly HtmlSanitizer _htmlSanitizer = CreateSanitizer();
     private static readonly Dictionary<string, long> AllowedMediaTypes = new()
@@ -297,6 +298,26 @@ public class FeedbackService(
 
         return await GetByIdAsync(id, userId) ?? throw new Exception("Failed to retrieve feedback");
     }
+
+    public async Task MarkSeenAsync(Guid id, Guid userId)
+    {
+        var feedback = await feedbackRepository.GetByIdAsync(id);
+        if (feedback == null)
+            throw new EntityNotFoundException("Feedback not found");
+
+        if (feedback.RecipientUserId != userId || !feedback.SharedWithPlayer)
+            throw new ForbiddenException("Only the recipient can mark shared feedback as seen");
+
+        // First-seen wins: preserve the original read-receipt timestamp.
+        if (feedback.SeenAt != null) return;
+
+        feedback.SeenAt = timeProvider.GetUtcNow().UtcDateTime;
+        feedbackRepository.Update(feedback);
+        await feedbackRepository.SaveChangesAsync();
+    }
+
+    public Task<int> GetUnseenCountAsync(Guid userId)
+        => feedbackRepository.GetUnseenCountAsync(userId);
 
     public async Task<FeedbackDto> AddImprovementPointAsync(Guid feedbackId, AddImprovementPointDto request, Guid userId)
     {

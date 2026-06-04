@@ -14,6 +14,9 @@ public class Feedback : BaseEntity
     public string? ContentPlainText { get; set; } // Stripped text for search/preview
     public bool SharedWithPlayer { get; set; }
 
+    // Set once when the recipient first opens shared feedback (read receipt). Null = unseen.
+    public DateTime? SeenAt { get; set; }
+
     // Phase A backward compat: Comment column kept in DB, mapped by EF.
     // Code writes to both Content and Comment to keep them in sync.
     // The Comment column will be dropped in Phase B (next release).

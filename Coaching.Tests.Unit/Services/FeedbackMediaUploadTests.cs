@@ -68,7 +68,8 @@ public class FeedbackMediaUploadTests : UnitTestBase
             _userProfileRepository,
             _mapper,
             _fileService,
-            _s3Settings);
+            _s3Settings,
+            TimeProvider);
     }
 
     [Test]
