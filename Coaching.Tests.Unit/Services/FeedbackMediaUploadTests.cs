@@ -6,6 +6,7 @@ using Coaching.Application.Services;
 using Coaching.Domain.Models.Feedback;
 using Coaching.Domain.Models.Drills;
 using FluentAssertions;
+using MassTransit;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using Shared.DataAccess.Repositories.Interfaces;
@@ -69,7 +70,8 @@ public class FeedbackMediaUploadTests : UnitTestBase
             _mapper,
             _fileService,
             _s3Settings,
-            TimeProvider);
+            TimeProvider,
+            Substitute.For<IPublishEndpoint>());
     }
 
     [Test]

@@ -5,6 +5,7 @@ using Coaching.Application.Services;
 using Coaching.Domain.Models.Drills;
 using Coaching.Domain.Models.Feedback;
 using FluentAssertions;
+using MassTransit;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using Shared.DataAccess.Repositories.Interfaces;
@@ -46,7 +47,8 @@ public class FeedbackSeenStatusTests : UnitTestBase
             _mapper,
             Substitute.For<IFileService>(),
             Options.Create(new S3Settings { Bucket = "b", PublicBaseUrl = "https://cdn" }),
-            TimeProvider);
+            TimeProvider,
+            Substitute.For<IPublishEndpoint>());
     }
 
     [Test]
