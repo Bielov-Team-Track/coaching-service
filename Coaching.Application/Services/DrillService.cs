@@ -57,48 +57,23 @@ public class DrillService : IDrillService
     {
         var query = _drillRepository.Query();
 
-        // Default to only public drills for general listing
-        query = query.Where(d => d.Visibility == DrillVisibility.Public);
-
-        if (filter.Category.HasValue)
-            query = query.Where(d => d.Category == filter.Category.Value);
-
-        if (filter.Intensity.HasValue)
-            query = query.Where(d => d.Intensity == filter.Intensity.Value);
-
-        if (filter.Skill.HasValue)
-            query = query.Where(d => d.Skills.Contains(filter.Skill.Value));
-
-        if (filter.CreatedByUserId.HasValue)
-            query = query.Where(d => d.CreatedByUserId == filter.CreatedByUserId.Value);
-
-        if (filter.ClubId.HasValue)
-            query = query.Where(d => d.ClubId == filter.ClubId.Value);
-
-        if (!string.IsNullOrWhiteSpace(filter.SearchTerm))
+        if (filter.Scope.HasValue && userId.HasValue)
         {
-            var searchLower = filter.SearchTerm.ToLower();
-            query = query.Where(d =>
-                d.Name.ToLower().Contains(searchLower) ||
-                (d.Description != null && d.Description.ToLower().Contains(searchLower)));
+            query = query.ApplyScope(filter.Scope.Value, userId.Value, filter.ClubId);
+        }
+        else
+        {
+            // Legacy public-only listing (web + anonymous), with optional author/club narrowing.
+            query = query.Where(d => d.Visibility == DrillVisibility.Public);
+
+            if (filter.CreatedByUserId.HasValue)
+                query = query.Where(d => d.CreatedByUserId == filter.CreatedByUserId.Value);
+
+            if (filter.ClubId.HasValue)
+                query = query.Where(d => d.ClubId == filter.ClubId.Value);
         }
 
-        // Equipment filter - drills must have ALL specified equipment
-        if (filter.Equipment != null && filter.Equipment.Length > 0)
-        {
-            var equipmentLower = filter.Equipment.Select(e => e.ToLower()).ToArray();
-            foreach (var equipName in equipmentLower)
-            {
-                if (filter.RequiredEquipmentOnly == true)
-                {
-                    query = query.Where(d => d.Equipment.Any(e => !e.IsOptional && e.Name.ToLower().Contains(equipName)));
-                }
-                else
-                {
-                    query = query.Where(d => d.Equipment.Any(e => e.Name.ToLower().Contains(equipName)));
-                }
-            }
-        }
+        query = query.ApplyAttributeFilters(filter);
 
         // Get total count before pagination
         var totalCount = await query.CountAsync();

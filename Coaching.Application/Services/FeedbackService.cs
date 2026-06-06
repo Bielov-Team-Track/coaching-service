@@ -4,11 +4,16 @@ using Coaching.Application.Interfaces.Repositories;
 using Coaching.Application.Interfaces.Services;
 using Coaching.Domain.Models.Feedback;
 using Ganss.Xss;
+using MassTransit;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Shared.DataAccess.Repositories.Interfaces;
 using Shared.Enums;
 using Shared.Exceptions;
+using Shared.Messaging.Contracts.Events.Coaching;
 using Shared.Models;
+using Shared.Options;
+using Shared.Services.FileStorage.Intefaces;
 
 namespace Coaching.Application.Services;
 
@@ -17,13 +22,49 @@ public class FeedbackService(
     IRepository<ImprovementPoint> pointRepository,
     IRepository<ImprovementPointDrill> drillLinkRepository,
     IRepository<ImprovementPointMedia> mediaRepository,
+    IRepository<FeedbackMedia> feedbackMediaRepository,
     IRepository<Praise> praiseRepository,
     IRepository<Coaching.Domain.Models.Drills.Drill> drillRepository,
     IFeedbackAuthorizationService authorizationService,
     IRepository<UserProfile> userProfileRepository,
-    IMapper mapper) : IFeedbackService
+    IMapper mapper,
+    IFileService fileService,
+    IOptions<S3Settings> s3Settings,
+    TimeProvider timeProvider,
+    IPublishEndpoint publishEndpoint) : IFeedbackService
 {
     private static readonly HtmlSanitizer _htmlSanitizer = CreateSanitizer();
+    private static readonly Dictionary<string, long> AllowedMediaTypes = new()
+    {
+        ["image/jpeg"] = 10L * 1024 * 1024,
+        ["image/png"] = 10L * 1024 * 1024,
+        ["image/gif"] = 10L * 1024 * 1024,
+        ["image/webp"] = 10L * 1024 * 1024,
+        ["video/mp4"] = 100L * 1024 * 1024,
+        ["video/quicktime"] = 100L * 1024 * 1024,
+        ["video/webm"] = 100L * 1024 * 1024,
+        ["application/pdf"] = 25L * 1024 * 1024,
+        ["application/msword"] = 25L * 1024 * 1024,
+        ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"] = 25L * 1024 * 1024,
+        ["application/vnd.ms-excel"] = 25L * 1024 * 1024,
+        ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"] = 25L * 1024 * 1024,
+    };
+
+    private static readonly Dictionary<string, string> ContentTypeExtensions = new()
+    {
+        ["image/jpeg"] = ".jpg",
+        ["image/png"] = ".png",
+        ["image/gif"] = ".gif",
+        ["image/webp"] = ".webp",
+        ["video/mp4"] = ".mp4",
+        ["video/quicktime"] = ".mov",
+        ["video/webm"] = ".webm",
+        ["application/pdf"] = ".pdf",
+        ["application/msword"] = ".doc",
+        ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"] = ".docx",
+        ["application/vnd.ms-excel"] = ".xls",
+        ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"] = ".xlsx",
+    };
 
     private static HtmlSanitizer CreateSanitizer()
     {
@@ -40,6 +81,26 @@ public class FeedbackService(
         sanitizer.AllowedSchemes.Clear();
         sanitizer.AllowedSchemes.UnionWith(new[] { "http", "https" });
         return sanitizer;
+    }
+
+    public async Task<FeedbackMediaUploadResponseDto> GetMediaUploadUrlAsync(
+        FeedbackMediaUploadRequestDto request, Guid coachUserId)
+    {
+        var raw = request.ContentType?.Trim().ToLowerInvariant() ?? "";
+        var mimeType = raw.Contains(';') ? raw[..raw.IndexOf(';')].TrimEnd() : raw;
+        if (!AllowedMediaTypes.TryGetValue(mimeType, out var maxSize))
+            throw new BadRequestException("Unsupported file type", ErrorCodeEnum.ValidationError);
+        if (request.FileSize <= 0 || request.FileSize > maxSize)
+            throw new BadRequestException("File exceeds the allowed size", ErrorCodeEnum.ValidationError);
+
+        var mediaId = Guid.NewGuid();
+        var extension = ContentTypeExtensions[mimeType];
+        var s3Key = $"feedback/{coachUserId}/{mediaId}{extension}";
+
+        var uploadUrl = await fileService.GetPresignedUploadLink(s3Key, s3Settings.Value.Bucket, mimeType);
+        var fileUrl = fileService.GetPublicUrl(s3Key);
+
+        return new FeedbackMediaUploadResponseDto { UploadUrl = uploadUrl, FileUrl = fileUrl };
     }
 
     public async Task<FeedbackDto> CreateAsync(CreateFeedbackDto request, Guid coachUserId)
@@ -92,6 +153,27 @@ public class FeedbackService(
             praise.FeedbackId = feedback.Id;
             praiseRepository.Add(praise);
             await praiseRepository.SaveChangesAsync();
+        }
+
+        if (request.Attachments != null)
+        {
+            var mediaOrder = 0;
+            foreach (var mediaDto in request.Attachments)
+            {
+                var media = mapper.Map<FeedbackMedia>(mediaDto);
+                media.FeedbackId = feedback.Id;
+                media.Order = mediaOrder++;
+                feedbackMediaRepository.Add(media);
+            }
+            await feedbackMediaRepository.SaveChangesAsync();
+        }
+
+        if (feedback.SharedWithPlayer)
+        {
+            await PublishFeedbackSharedAsync(
+                feedback,
+                BuildPreview(feedback.ContentPlainText, request.Praise?.Message, request.ImprovementPoints?.Count ?? 0));
+            await feedbackRepository.SaveChangesAsync();
         }
 
         return await GetByIdAsync(feedback.Id, coachUserId) ?? throw new Exception("Failed to retrieve created feedback");
@@ -214,19 +296,49 @@ public class FeedbackService(
 
     public async Task<FeedbackDto> ShareWithPlayerAsync(Guid id, bool share, Guid userId)
     {
-        var feedback = await feedbackRepository.GetByIdAsync(id);
+        var feedback = await feedbackRepository.GetByIdWithDetailsAsync(id);
         if (feedback == null)
             throw new EntityNotFoundException("Feedback not found");
 
         if (feedback.CoachUserId != userId)
             throw new ForbiddenException("Only the coach can share this feedback");
 
+        var wasShared = feedback.SharedWithPlayer;
         feedback.SharedWithPlayer = share;
         feedbackRepository.Update(feedback);
+
+        // Notify the player only on the private → shared transition (no re-notify on re-share).
+        if (!wasShared && share)
+        {
+            await PublishFeedbackSharedAsync(
+                feedback,
+                BuildPreview(feedback.ContentPlainText, feedback.Praise?.Message, feedback.ImprovementPoints.Count));
+        }
+
         await feedbackRepository.SaveChangesAsync();
 
         return await GetByIdAsync(id, userId) ?? throw new Exception("Failed to retrieve feedback");
     }
+
+    public async Task MarkSeenAsync(Guid id, Guid userId)
+    {
+        var feedback = await feedbackRepository.GetByIdAsync(id);
+        if (feedback == null)
+            throw new EntityNotFoundException("Feedback not found");
+
+        if (feedback.RecipientUserId != userId || !feedback.SharedWithPlayer)
+            throw new ForbiddenException("Only the recipient can mark shared feedback as seen");
+
+        // First-seen wins: preserve the original read-receipt timestamp.
+        if (feedback.SeenAt != null) return;
+
+        feedback.SeenAt = timeProvider.GetUtcNow().UtcDateTime;
+        feedbackRepository.Update(feedback);
+        await feedbackRepository.SaveChangesAsync();
+    }
+
+    public Task<int> GetUnseenCountAsync(Guid userId)
+        => feedbackRepository.GetUnseenCountAsync(userId);
 
     public async Task<FeedbackDto> AddImprovementPointAsync(Guid feedbackId, AddImprovementPointDto request, Guid userId)
     {
@@ -506,6 +618,43 @@ public class FeedbackService(
     private async Task EnrichWithProfilesAsync(FeedbackDto feedback)
     {
         await EnrichWithProfilesAsync(new[] { feedback });
+    }
+
+    private async Task PublishFeedbackSharedAsync(Feedback feedback, string? preview)
+    {
+        await publishEndpoint.Publish(new FeedbackSharedEvent
+        {
+            UserId = feedback.RecipientUserId,
+            FeedbackId = feedback.Id,
+            CoachUserId = feedback.CoachUserId,
+            CoachName = await ResolveCoachNameAsync(feedback.CoachUserId),
+            Preview = preview,
+        });
+    }
+
+    private async Task<string> ResolveCoachNameAsync(Guid coachUserId)
+    {
+        var profile = await userProfileRepository.Query()
+            .Where(u => u.Id == coachUserId)
+            .Select(u => new { u.Name, u.Surname })
+            .FirstOrDefaultAsync();
+
+        var name = profile == null ? "" : $"{profile.Name ?? ""} {profile.Surname ?? ""}".Trim();
+        return string.IsNullOrWhiteSpace(name) ? "Your coach" : name;
+    }
+
+    private const int PreviewMaxLength = 140;
+
+    private static string? BuildPreview(string? note, string? praiseMessage, int pointCount)
+    {
+        var text = !string.IsNullOrWhiteSpace(praiseMessage) ? praiseMessage
+            : !string.IsNullOrWhiteSpace(note) ? note
+            : pointCount > 0 ? $"{pointCount} thing{(pointCount == 1 ? "" : "s")} to work on"
+            : null;
+
+        if (string.IsNullOrWhiteSpace(text)) return null;
+        text = text.Trim();
+        return text.Length > PreviewMaxLength ? text[..PreviewMaxLength] : text;
     }
 
     private static string? StripHtml(string? html)

@@ -4,6 +4,7 @@ namespace Coaching.Application.Interfaces.Services;
 
 public interface IFeedbackService
 {
+    Task<FeedbackMediaUploadResponseDto> GetMediaUploadUrlAsync(FeedbackMediaUploadRequestDto request, Guid coachUserId);
     Task<FeedbackDto> CreateAsync(CreateFeedbackDto request, Guid coachUserId);
     Task<FeedbackDto?> GetByIdAsync(Guid id, Guid requestingUserId);
     Task<FeedbackDto> UpdateAsync(Guid id, UpdateFeedbackDto request, Guid userId);
@@ -12,6 +13,8 @@ public interface IFeedbackService
     Task<FeedbackListResponseDto> GetReceivedFeedbackAsync(Guid userId, int page = 1, int pageSize = 20);
     Task<FeedbackListResponseDto> GetGivenFeedbackAsync(Guid userId, int page = 1, int pageSize = 20);
     Task<FeedbackDto> ShareWithPlayerAsync(Guid id, bool share, Guid userId);
+    Task MarkSeenAsync(Guid id, Guid userId);
+    Task<int> GetUnseenCountAsync(Guid userId);
     Task<FeedbackDto> AddImprovementPointAsync(Guid feedbackId, AddImprovementPointDto request, Guid userId);
     Task<FeedbackDto> UpdateImprovementPointAsync(Guid feedbackId, Guid pointId, UpdateImprovementPointDto request, Guid userId);
     Task<FeedbackDto> RemoveImprovementPointAsync(Guid feedbackId, Guid pointId, Guid userId);

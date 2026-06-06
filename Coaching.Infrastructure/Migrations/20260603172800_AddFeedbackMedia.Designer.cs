@@ -3,6 +3,7 @@ using System;
 using Coaching.Infrastructure.Data.Context;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Coaching.Infrastructure.Migrations
 {
     [DbContext(typeof(CoachingDbContext))]
-    partial class CoachingDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260603172800_AddFeedbackMedia")]
+    partial class AddFeedbackMedia
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -987,9 +990,6 @@ namespace Coaching.Infrastructure.Migrations
 
                     b.Property<Guid>("RecipientUserId")
                         .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("SeenAt")
-                        .HasColumnType("timestamp with time zone");
 
                     b.Property<bool>("SharedWithPlayer")
                         .HasColumnType("boolean");

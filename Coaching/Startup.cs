@@ -66,6 +66,8 @@ namespace Coaching
             services.AddGrpc();
             services.AddGrpcHealthChecks();
 
+            services.AddSingleton(TimeProvider.System);
+
             // Database
             var connectionString = Configuration.GetConnectionString("DefaultConnection");
             services.AddDbContext<CoachingDbContext>(options =>
