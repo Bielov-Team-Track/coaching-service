@@ -211,9 +211,20 @@ public record UpdateDrillDto(
 
 public class DrillFilterRequest
 {
+    // Source scope. Null keeps the legacy public-only listing (web); an explicit scope
+    // unlocks the accessible library (public + own + contextual club) for mobile.
+    public DrillScope? Scope { get; set; }
+
     public DrillCategory? Category { get; set; }
     public DrillIntensity? Intensity { get; set; }
     public DrillSkill? Skill { get; set; }
+
+    // Multi-select attribute filters (OR within each dimension). Take precedence over the
+    // singular fields above when provided.
+    public DrillCategory[]? Categories { get; set; }
+    public DrillIntensity[]? Intensities { get; set; }
+    public DrillSkill[]? Skills { get; set; }
+
     public Guid? CreatedByUserId { get; set; }
     public Guid? ClubId { get; set; }
     public string? SearchTerm { get; set; }

@@ -35,6 +35,17 @@ public enum DrillVisibility
     Private = 1
 }
 
+// Source scope for the unified drill list endpoint. Null = legacy public-only listing
+// (used by web). Mobile sends an explicit scope to browse the accessible library.
+public enum DrillScope
+{
+    All = 0,
+    Mine = 1,
+    Club = 2,
+    Saved = 3,
+    Liked = 4
+}
+
 public enum TemplateVisibility
 {
     Public = 0,
