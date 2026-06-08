@@ -57,10 +57,34 @@ public class RunService : IRunService
                 StartedByUserId = requestingUserId
             };
             _runRepository.Add(run);
+
+            foreach (var item in orderedItems)
+            {
+                run.Items.Add(new TrainingPlanRunItem
+                {
+                    RunId = run.Id,
+                    PlanItemId = item.Id,
+                    DrillId = item.DrillId,
+                    Order = item.Order,
+                    PlannedDurationSeconds = item.Duration * SecondsPerMinute,
+                    ActualElapsedSeconds = 0,
+                    StartedAtUtc = item.Id == firstItem?.Id ? now : null,
+                    CompletedAtUtc = null
+                });
+            }
         }
         else
         {
-            run.Items.Clear();
+            // Restart in place: reset the existing run + its item rows rather than clearing
+            // and re-adding. Orphaning the tracked children made EF emit deletes that hit
+            // 0 rows (DbUpdateConcurrencyException); reusing the rows keeps this to plain
+            // UPDATEs. The items already snapshot this plan from the prior start.
+            foreach (var runItem in run.Items)
+            {
+                runItem.ActualElapsedSeconds = 0;
+                runItem.StartedAtUtc = runItem.PlanItemId == firstItem?.Id ? now : null;
+                runItem.CompletedAtUtc = null;
+            }
         }
 
         run.StartedByUserId = requestingUserId;
@@ -70,21 +94,6 @@ public class RunService : IRunService
         run.CurrentItemId = firstItem?.Id;
         run.CurrentItemStartedAtUtc = firstItem != null ? now : null;
         run.CurrentItemPausedElapsedSeconds = 0;
-
-        foreach (var item in orderedItems)
-        {
-            run.Items.Add(new TrainingPlanRunItem
-            {
-                RunId = run.Id,
-                PlanItemId = item.Id,
-                DrillId = item.DrillId,
-                Order = item.Order,
-                PlannedDurationSeconds = item.Duration * SecondsPerMinute,
-                ActualElapsedSeconds = 0,
-                StartedAtUtc = item.Id == firstItem?.Id ? now : null,
-                CompletedAtUtc = null
-            });
-        }
 
         await _runRepository.SaveChangesAsync();
         return await BroadcastAsync(eventId, run, requestingUserId == plan.CreatedByUserId);
