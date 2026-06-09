@@ -48,6 +48,19 @@ public class RunService : IRunService
         var firstItem = orderedItems.FirstOrDefault();
 
         var run = await _runRepository.GetByEventIdWithDetailsAsync(eventId);
+
+        TrainingPlanRunItem NewRunItem(PlanItem item) => new()
+        {
+            RunId = run!.Id,
+            PlanItemId = item.Id,
+            DrillId = item.DrillId,
+            Order = item.Order,
+            PlannedDurationSeconds = item.Duration * SecondsPerMinute,
+            ActualElapsedSeconds = 0,
+            StartedAtUtc = item.Id == firstItem?.Id ? now : null,
+            CompletedAtUtc = null,
+        };
+
         if (run == null)
         {
             run = new TrainingPlanRun
@@ -60,30 +73,38 @@ public class RunService : IRunService
 
             foreach (var item in orderedItems)
             {
-                run.Items.Add(new TrainingPlanRunItem
-                {
-                    RunId = run.Id,
-                    PlanItemId = item.Id,
-                    DrillId = item.DrillId,
-                    Order = item.Order,
-                    PlannedDurationSeconds = item.Duration * SecondsPerMinute,
-                    ActualElapsedSeconds = 0,
-                    StartedAtUtc = item.Id == firstItem?.Id ? now : null,
-                    CompletedAtUtc = null
-                });
+                run.Items.Add(NewRunItem(item));
             }
         }
         else
         {
-            // Restart in place: reset the existing run + its item rows rather than clearing
-            // and re-adding. Orphaning the tracked children made EF emit deletes that hit
-            // 0 rows (DbUpdateConcurrencyException); reusing the rows keeps this to plain
-            // UPDATEs. The items already snapshot this plan from the prior start.
-            foreach (var runItem in run.Items)
+            // Restart in place, reconciled to the CURRENT plan (it may have been edited on web
+            // between runs): reset rows whose plan item still exists, add rows for new plan items,
+            // drop rows whose plan item is gone. Reusing existing rows keeps them to plain UPDATEs;
+            // a blanket clear + re-add orphaned every child and made EF emit deletes that hit 0
+            // rows (DbUpdateConcurrencyException).
+            var planItemIds = orderedItems.Select(i => i.Id).ToHashSet();
+            foreach (var stale in run.Items.Where(ri => !planItemIds.Contains(ri.PlanItemId)).ToList())
             {
-                runItem.ActualElapsedSeconds = 0;
-                runItem.StartedAtUtc = runItem.PlanItemId == firstItem?.Id ? now : null;
-                runItem.CompletedAtUtc = null;
+                run.Items.Remove(stale);
+            }
+
+            foreach (var item in orderedItems)
+            {
+                var runItem = run.Items.FirstOrDefault(ri => ri.PlanItemId == item.Id);
+                if (runItem == null)
+                {
+                    run.Items.Add(NewRunItem(item));
+                }
+                else
+                {
+                    runItem.DrillId = item.DrillId;
+                    runItem.Order = item.Order;
+                    runItem.PlannedDurationSeconds = item.Duration * SecondsPerMinute;
+                    runItem.ActualElapsedSeconds = 0;
+                    runItem.StartedAtUtc = item.Id == firstItem?.Id ? now : null;
+                    runItem.CompletedAtUtc = null;
+                }
             }
         }
 
