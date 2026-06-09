@@ -54,6 +54,7 @@ public class CoachingDbContext : BaseDbContext
     public DbSet<ImprovementPoint> ImprovementPoints => Set<ImprovementPoint>();
     public DbSet<ImprovementPointDrill> ImprovementPointDrills => Set<ImprovementPointDrill>();
     public DbSet<ImprovementPointMedia> ImprovementPointMedia => Set<ImprovementPointMedia>();
+    public DbSet<FeedbackMedia> FeedbackMedia => Set<FeedbackMedia>();
     public DbSet<Praise> Praises => Set<Praise>();
     public DbSet<PlayerBadge> PlayerBadges => Set<PlayerBadge>();
 

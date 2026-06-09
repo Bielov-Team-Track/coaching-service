@@ -14,7 +14,9 @@ public class FeedbackDto
     public Guid? EventId { get; set; }
     public string? Comment { get; set; }
     public bool SharedWithPlayer { get; set; }
+    public DateTime? SeenAt { get; set; }
     public List<ImprovementPointDto> ImprovementPoints { get; set; } = new();
+    public List<FeedbackMediaDto> Attachments { get; set; } = new();
     public PraiseDto? Praise { get; set; }
     public DateTime? CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
@@ -42,6 +44,22 @@ public class ImprovementPointMediaDto
     public string? Title { get; set; }
 }
 
+public class FeedbackMediaDto
+{
+    public Guid Id { get; set; }
+    public required string Url { get; set; }
+    public FeedbackMediaType Type { get; set; }
+    public string? Title { get; set; }
+    public int Order { get; set; }
+}
+
+public record CreateFeedbackMediaDto
+{
+    public required string Url { get; set; }
+    public FeedbackMediaType Type { get; set; }
+    public string? Title { get; set; }
+}
+
 public class PraiseDto
 {
     public Guid Id { get; set; }
@@ -58,6 +76,7 @@ public record CreateFeedbackDto
     public string? Comment { get; set; }
     public bool SharedWithPlayer { get; set; }
     public List<CreateImprovementPointDto>? ImprovementPoints { get; set; }
+    public List<CreateFeedbackMediaDto>? Attachments { get; set; }
     public CreatePraiseDto? Praise { get; set; }
 }
 
@@ -105,6 +124,19 @@ public record UpdatePraiseDto
 {
     public string? Message { get; set; }
     public BadgeType? BadgeType { get; set; }
+}
+
+public class FeedbackMediaUploadRequestDto
+{
+    public required string FileName { get; set; }
+    public required string ContentType { get; set; }
+    public required long FileSize { get; set; }
+}
+
+public class FeedbackMediaUploadResponseDto
+{
+    public string UploadUrl { get; set; } = string.Empty;
+    public string FileUrl { get; set; } = string.Empty;
 }
 
 public class FeedbackListResponseDto

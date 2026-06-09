@@ -85,6 +85,30 @@ public class FeedbackController : Shared.Microservices.Controllers.BaseApiContro
         return Ok(result);
     }
 
+    [HttpGet("me/feedback/unseen-count")]
+    public async Task<IActionResult> GetUnseenCount()
+    {
+        CheckIsUserLoggedIn();
+        var count = await _feedbackService.GetUnseenCountAsync(JwtPayload.UserId);
+        return Ok(new { count });
+    }
+
+    [HttpPost("feedback/{id:guid}/seen")]
+    public async Task<IActionResult> MarkSeen(Guid id)
+    {
+        CheckIsUserLoggedIn();
+        await _feedbackService.MarkSeenAsync(id, JwtPayload.UserId);
+        return NoContent();
+    }
+
+    [HttpPost("feedback/media/upload-url")]
+    public async Task<IActionResult> GetMediaUploadUrl([FromBody] FeedbackMediaUploadRequestDto request)
+    {
+        CheckIsUserLoggedIn();
+        var response = await _feedbackService.GetMediaUploadUrlAsync(request, JwtPayload.UserId);
+        return Ok(response);
+    }
+
     [HttpPost("feedback")]
     public async Task<IActionResult> Create([FromBody] CreateFeedbackDto request)
     {

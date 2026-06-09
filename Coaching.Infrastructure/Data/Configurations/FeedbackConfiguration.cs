@@ -23,6 +23,11 @@ public class FeedbackConfiguration : IEntityTypeConfiguration<Feedback>
             .HasForeignKey(ip => ip.FeedbackId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        builder.HasMany(f => f.Media)
+            .WithOne(m => m.Feedback)
+            .HasForeignKey(m => m.FeedbackId)
+            .OnDelete(DeleteBehavior.Cascade);
+
         builder.HasOne(f => f.Praise)
             .WithOne(p => p.Feedback)
             .HasForeignKey<Praise>(p => p.FeedbackId)

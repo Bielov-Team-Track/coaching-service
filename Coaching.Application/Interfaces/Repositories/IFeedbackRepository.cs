@@ -9,4 +9,5 @@ public interface IFeedbackRepository : IRepository<Feedback>
     Task<IEnumerable<Feedback>> GetByRecipientIdAsync(Guid userId, int page = 1, int pageSize = 20);
     Task<IEnumerable<Feedback>> GetByCoachIdAsync(Guid userId, int page = 1, int pageSize = 20);
     Task<IEnumerable<Feedback>> GetByEventIdAsync(Guid eventId);
+    Task<int> GetUnseenCountAsync(Guid recipientUserId);
 }
