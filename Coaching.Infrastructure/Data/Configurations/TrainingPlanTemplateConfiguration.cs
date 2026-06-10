@@ -14,10 +14,10 @@ public class TrainingPlanConfiguration : IEntityTypeConfiguration<TrainingPlan>
 
         builder.Property(t => t.Name)
             .IsRequired()
-            .HasMaxLength(200);
+            .HasMaxLength(TrainingPlan.NameMaxLength);
 
         builder.Property(t => t.Description)
-            .HasMaxLength(2000);
+            .HasMaxLength(TrainingPlan.DescriptionMaxLength);
 
         builder.Property(t => t.Visibility)
             .HasConversion<int>()

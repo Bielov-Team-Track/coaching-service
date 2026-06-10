@@ -12,7 +12,7 @@ public class PlanItemConfiguration : IEntityTypeConfiguration<PlanItem>
         builder.HasKey(i => i.Id);
 
         builder.Property(i => i.Notes)
-            .HasMaxLength(500);
+            .HasMaxLength(PlanItem.NotesMaxLength);
 
         builder.Property(i => i.DrillId)
             .IsRequired();

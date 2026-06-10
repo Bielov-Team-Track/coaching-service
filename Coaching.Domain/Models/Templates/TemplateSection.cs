@@ -4,6 +4,8 @@ namespace Coaching.Domain.Models.Templates;
 
 public class PlanSection : BaseEntity
 {
+    public const int NameMaxLength = 100;
+
     public Guid TemplateId { get; set; }
     public required string Name { get; set; }
     public int Order { get; set; }

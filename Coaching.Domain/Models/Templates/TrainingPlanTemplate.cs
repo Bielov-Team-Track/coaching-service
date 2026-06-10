@@ -5,6 +5,9 @@ namespace Coaching.Domain.Models.Templates;
 
 public class TrainingPlan : BaseEntity
 {
+    public const int NameMaxLength = 200;
+    public const int DescriptionMaxLength = 10000;
+
     public required string Name { get; set; }
     public string? Description { get; set; }
     public Guid CreatedByUserId { get; set; }
