@@ -43,6 +43,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IFeedbackService, FeedbackService>();
         services.AddScoped<IFeedbackAuthorizationService, FeedbackAuthorizationService>();
         services.AddScoped<IBadgeService, BadgeService>();
+        services.AddScoped<IFeedbackMediaUrlSigner, FeedbackMediaUrlSigner>();
         return services;
     }
 }
