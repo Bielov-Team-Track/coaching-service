@@ -5,6 +5,8 @@ namespace Coaching.Domain.Models.Templates;
 
 public class PlanItem : BaseEntity
 {
+    public const int NotesMaxLength = 500;
+
     public Guid TemplateId { get; set; }
     public Guid DrillId { get; set; }
     public Guid? SectionId { get; set; }
