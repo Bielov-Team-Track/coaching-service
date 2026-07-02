@@ -311,10 +311,10 @@
       },
       "MassTransit": {
         "type": "Transitive",
-        "resolved": "8.5.9",
-        "contentHash": "hhJyrU+7qReF1F+MBgH73E+KEx9oBcRFaCzEk90r8hOgI4HPhT2DYVfaHKGTHADE/P49H48xGgvO30Q9nWn7aA==",
+        "resolved": "8.5.10",
+        "contentHash": "TGi34UA8RftBIpYCHEdoIP5uSu2/pLWZRen4RUcg4CV1nr8MmCZMuFYjzvXXUyFcj0ZuRQxZZNhG7fB5/raSOg==",
         "dependencies": {
-          "MassTransit.Abstractions": "8.5.9",
+          "MassTransit.Abstractions": "8.5.10",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.0",
           "Microsoft.Extensions.Diagnostics.HealthChecks": "10.0.0",
           "Microsoft.Extensions.Hosting.Abstractions": "10.0.0",
@@ -324,27 +324,41 @@
       },
       "MassTransit.Abstractions": {
         "type": "Transitive",
-        "resolved": "8.5.9",
-        "contentHash": "osNYcFMNzMbwPG6x5zc9u5l0t43+uvlbVqjS99hSIaop8uWnABps7NRgqAUgWX30Zd00wKhDv1nBFRtPV6CFSw=="
+        "resolved": "8.5.10",
+        "contentHash": "nZnm2YNH+NcVwY6yC114sJy8J9LtKdFjfKUm/A5HfmzOlZ8ksjgHaPBg5XCG1VAqKDRDFnaudIcesVultKJD7g=="
       },
       "MassTransit.EntityFrameworkCore": {
         "type": "Transitive",
-        "resolved": "8.5.9",
-        "contentHash": "+82AnsnC87fA0U0RJHfOQtgNUNu/wneAL44Rz/yFhLodNTeAAnuIC1hK8GWru8M6xgoffNL7bEMjAvo13WnavA==",
+        "resolved": "8.5.10",
+        "contentHash": "eCfWj3l4WMlDOc64I48yq3jePQMaQ+07hGIpWngvYW8/ey7qbayO4osHeO0m/FKBPUIfNJqTMRqAqWMn/xV+ww==",
         "dependencies": {
-          "MassTransit": "8.5.9",
+          "MassTransit": "8.5.10",
           "Microsoft.EntityFrameworkCore.Relational": "10.0.0",
           "Microsoft.Extensions.Caching.Memory": "10.0.0"
         }
       },
       "MassTransit.RabbitMQ": {
         "type": "Transitive",
-        "resolved": "8.5.9",
-        "contentHash": "TikWOjyKxh9Lbk4BppOtF5PIAt5HwzSXIUgJ3bqI1waD94xR/9xhxQyl2xY/913vMhqu4DObXaQESLr9WNberA==",
+        "resolved": "8.5.10",
+        "contentHash": "5aQGpJpeqRhRv+htkXfi6MfWu0dj/4Lcf1c6h2J3tYZClupGklqB1ixlP3IRdZExrH9BI/60uYoxR+7pg3s1oQ==",
         "dependencies": {
-          "MassTransit": "8.5.9",
+          "MassTransit": "8.5.10",
           "RabbitMQ.Client": "7.2.1"
         }
+      },
+      "MessagePack": {
+        "type": "Transitive",
+        "resolved": "2.5.187",
+        "contentHash": "uW4j8m4Nc+2Mk5n6arOChavJ9bLjkis0qWASOj2h2OwmfINuzYv+mjCHUymrYhmyyKTu3N+ObtTXAY4uQ7jIhg==",
+        "dependencies": {
+          "MessagePack.Annotations": "2.5.187",
+          "Microsoft.NET.StringTools": "17.6.3"
+        }
+      },
+      "MessagePack.Annotations": {
+        "type": "Transitive",
+        "resolved": "2.5.187",
+        "contentHash": "/IvvMMS8opvlHjEJ/fR2Cal4Co726Kj77Z8KiohFhuHfLHHmb9uUxW5+tSCL4ToKFfkQlrS3HD638mRq83ySqA=="
       },
       "Microsoft.ApplicationInsights": {
         "type": "Transitive",
@@ -375,6 +389,16 @@
           "Microsoft.AspNetCore.JsonPatch": "10.0.0",
           "Newtonsoft.Json": "13.0.3",
           "Newtonsoft.Json.Bson": "1.0.2"
+        }
+      },
+      "Microsoft.AspNetCore.SignalR.StackExchangeRedis": {
+        "type": "Transitive",
+        "resolved": "10.0.0",
+        "contentHash": "Up1VQsTMn5qj0Ao4NuzC3dIXBA2aEnmoO/auWLAlIvTy58PSuAEFcrdXNAlXjgislR5n4lq785MLf5SKhXNEzw==",
+        "dependencies": {
+          "MessagePack": "2.5.187",
+          "Microsoft.Extensions.Options": "10.0.0",
+          "StackExchange.Redis": "2.7.27"
         }
       },
       "Microsoft.AspNetCore.TestHost": {
@@ -922,6 +946,11 @@
           "Microsoft.IdentityModel.Logging": "8.3.1"
         }
       },
+      "Microsoft.NET.StringTools": {
+        "type": "Transitive",
+        "resolved": "17.6.3",
+        "contentHash": "N0ZIanl1QCgvUumEL1laasU0a7sOE5ZwLZVTn0pAePnfhq8P7SvTjF8Axq+CnavuQkmdQpGNXQ1efZtu5kDFbA=="
+      },
       "Microsoft.OpenApi": {
         "type": "Transitive",
         "resolved": "2.3.0",
@@ -1424,6 +1453,7 @@
           "Grpc.AspNetCore.HealthChecks": "[2.76.0, )",
           "Microsoft.AspNetCore.Authentication.JwtBearer": "[10.0.0, )",
           "Microsoft.AspNetCore.Mvc.NewtonsoftJson": "[10.0.0, )",
+          "Microsoft.AspNetCore.SignalR.StackExchangeRedis": "[10.0.0, )",
           "Microsoft.Extensions.Caching.StackExchangeRedis": "[10.0.0, )",
           "Npgsql.EntityFrameworkCore.PostgreSQL": "[10.0.0, )",
           "OpenTelemetry.Instrumentation.EntityFrameworkCore": "[1.15.0-beta.1, )",
