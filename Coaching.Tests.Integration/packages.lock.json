@@ -1575,6 +1575,7 @@
           "AWSSDK.SimpleEmailV2": "[4.0.5.1, )",
           "Grpc.Net.Client": "[2.71.0, )",
           "MailKit": "[4.12.1, )",
+          "Microsoft.Extensions.Caching.Abstractions": "[10.0.0, )",
           "Microsoft.Extensions.Configuration.Binder": "[10.0.0, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.0, )",
           "Microsoft.Extensions.Hosting.Abstractions": "[10.0.0, )",
