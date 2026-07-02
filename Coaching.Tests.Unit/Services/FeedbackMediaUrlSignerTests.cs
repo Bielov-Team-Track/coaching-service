@@ -1,0 +1,87 @@
+using Amazon.S3;
+using Amazon.S3.Model;
+using Coaching.Application.Services;
+using FluentAssertions;
+using Microsoft.Extensions.Options;
+using NSubstitute;
+using Shared.Options;
+using Shared.Testing.Base;
+
+namespace Coaching.Tests.Unit.Services;
+
+[TestFixture]
+[Category("Unit")]
+public class FeedbackMediaUrlSignerTests : UnitTestBase
+{
+    private const string PublicBaseUrl = "https://volleyer.s3.eu-west-2.amazonaws.com";
+
+    private IAmazonS3 _s3 = null!;
+    private FeedbackMediaUrlSigner _sut = null!;
+
+    [SetUp]
+    public override void SetUp()
+    {
+        base.SetUp();
+        _s3 = Substitute.For<IAmazonS3>();
+        _s3.GetPreSignedURL(Arg.Any<GetPreSignedUrlRequest>())
+            .Returns(call => $"https://signed.example/{call.Arg<GetPreSignedUrlRequest>().Key}?sig=abc");
+
+        _sut = new FeedbackMediaUrlSigner(
+            _s3,
+            Options.Create(new S3Settings { Bucket = "volleyer", PublicBaseUrl = PublicBaseUrl }),
+            TimeProvider);
+    }
+
+    [Test]
+    public void SignReadUrl_OwnBucketUrl_ReturnsPresignedGet()
+    {
+        // Arrange
+        var stored = $"{PublicBaseUrl}/feedback/coach-1/file-1.mp4";
+
+        // Act
+        var result = _sut.SignReadUrl(stored);
+
+        // Assert
+        result.Should().Be("https://signed.example/feedback/coach-1/file-1.mp4?sig=abc");
+        _s3.Received(1).GetPreSignedURL(Arg.Is<GetPreSignedUrlRequest>(r =>
+            r.BucketName == "volleyer" &&
+            r.Key == "feedback/coach-1/file-1.mp4" &&
+            r.Verb == HttpVerb.GET &&
+            r.Expires == Now.Add(FeedbackMediaUrlSigner.ReadUrlLifetime)));
+    }
+
+    [Test]
+    public void SignReadUrl_ExternalUrl_IsReturnedUntouched()
+    {
+        // Arrange
+        var external = "https://www.youtube.com/watch?v=abc";
+
+        // Act
+        var result = _sut.SignReadUrl(external);
+
+        // Assert
+        result.Should().Be(external);
+        _s3.DidNotReceive().GetPreSignedURL(Arg.Any<GetPreSignedUrlRequest>());
+    }
+
+    [Test]
+    public void SignReadUrl_EmptyUrl_IsReturnedUntouched()
+    {
+        // Act & Assert
+        _sut.SignReadUrl("").Should().Be("");
+    }
+
+    [Test]
+    public void SignReadUrl_StripsQueryStringFromStoredUrl()
+    {
+        // Arrange
+        var stored = $"{PublicBaseUrl}/feedback/coach-1/file-1.mp4?stale=token";
+
+        // Act
+        _sut.SignReadUrl(stored);
+
+        // Assert
+        _s3.Received(1).GetPreSignedURL(Arg.Is<GetPreSignedUrlRequest>(r =>
+            r.Key == "feedback/coach-1/file-1.mp4"));
+    }
+}
