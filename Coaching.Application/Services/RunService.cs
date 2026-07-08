@@ -15,27 +15,55 @@ public class RunService : IRunService
     private readonly ITrainingPlanRunRepository _runRepository;
     private readonly ITrainingPlanRepository _planRepository;
     private readonly IRunBroadcaster _broadcaster;
+    private readonly IEventsGrpcClient _eventsGrpcClient;
     private readonly TimeProvider _timeProvider;
 
     public RunService(
         ITrainingPlanRunRepository runRepository,
         ITrainingPlanRepository planRepository,
         IRunBroadcaster broadcaster,
+        IEventsGrpcClient eventsGrpcClient,
         TimeProvider timeProvider)
     {
         _runRepository = runRepository;
         _planRepository = planRepository;
         _broadcaster = broadcaster;
+        _eventsGrpcClient = eventsGrpcClient;
         _timeProvider = timeProvider;
     }
 
     public async Task<RunDto?> GetByEventIdAsync(Guid eventId, Guid requestingUserId)
     {
-        var run = await _runRepository.GetByEventIdWithDetailsAsync(eventId);
-        if (run == null) return null;
+        // Gate BEFORE touching the run table: resolving the plan creator first and checking it
+        // against requestingUserId lets a legitimate creator skip the events-service round trip,
+        // but an unauthorized caller must get the identical response (403/404) whether or not a
+        // run — or even a plan — exists yet, so nothing about the run's existence leaks. Mirrors
+        // TrainingPlanService.GetByEventIdAsync's gate-before-fetch order for the same reason.
+        var creatorId = await InstancePlanQuery(eventId)
+            .Select(p => (Guid?)p.CreatedByUserId)
+            .FirstOrDefaultAsync();
+        var isCreator = creatorId == requestingUserId;
 
-        var creatorId = await GetPlanCreatorIdAsync(run.PlanId);
-        return MapToDto(run, requestingUserId == creatorId);
+        if (!isCreator)
+            await EnsureCanReadRunAsync(eventId, requestingUserId);
+
+        var run = await _runRepository.GetByEventIdWithDetailsAsync(eventId);
+        return run == null ? null : MapToDto(run, isCreator);
+    }
+
+    // Mirrors TrainingPlanService.GetByEventIdAsync's participant/eventExists check (the sibling
+    // read for the same event-attached plan) exactly, extended with the event-admin/host check
+    // already used elsewhere in coaching-service (FeedbackAuthorizationService,
+    // TrainingPlanService.PromoteToTemplateAsync) for the case where a host isn't in the
+    // events-service participant roster.
+    private async Task EnsureCanReadRunAsync(Guid eventId, Guid userId)
+    {
+        var (isParticipant, eventExists) = await _eventsGrpcClient.IsEventParticipantAsync(eventId, userId);
+        if (!eventExists)
+            throw new EntityNotFoundException("Event not found");
+
+        if (!isParticipant && !await _eventsGrpcClient.IsEventAdminAsync(eventId, userId))
+            throw new ForbiddenException("Only event participants, hosts, or the plan creator can view this run");
     }
 
     public async Task<RunDto> StartAsync(Guid eventId, Guid requestingUserId)
@@ -235,13 +263,12 @@ public class RunService : IRunService
         return (run, true);
     }
 
+    private IQueryable<TrainingPlan> InstancePlanQuery(Guid eventId) =>
+        _planRepository.Query().Where(p => p.EventId == eventId && p.PlanType == PlanType.Instance && !p.IsDeleted);
+
     private async Task<TrainingPlan> GetInstancePlanOrThrowAsync(Guid eventId)
     {
-        var plan = await _planRepository.Query()
-            .Include(p => p.Items)
-            .FirstOrDefaultAsync(p => p.EventId == eventId
-                && p.PlanType == PlanType.Instance
-                && !p.IsDeleted)
+        var plan = await InstancePlanQuery(eventId).Include(p => p.Items).FirstOrDefaultAsync()
             ?? throw new EntityNotFoundException("No training plan is attached to this event");
 
         return plan;

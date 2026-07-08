@@ -19,6 +19,7 @@ public class RunServiceTests : UnitTestBase
     private ITrainingPlanRunRepository _runRepository = null!;
     private ITrainingPlanRepository _planRepository = null!;
     private IRunBroadcaster _broadcaster = null!;
+    private IEventsGrpcClient _eventsGrpcClient = null!;
     private RunService _sut = null!;
 
     private static readonly Guid CreatorId = Guid.NewGuid();
@@ -37,7 +38,8 @@ public class RunServiceTests : UnitTestBase
         _runRepository = Substitute.For<ITrainingPlanRunRepository>();
         _planRepository = Substitute.For<ITrainingPlanRepository>();
         _broadcaster = Substitute.For<IRunBroadcaster>();
-        _sut = new RunService(_runRepository, _planRepository, _broadcaster, TimeProvider);
+        _eventsGrpcClient = Substitute.For<IEventsGrpcClient>();
+        _sut = new RunService(_runRepository, _planRepository, _broadcaster, _eventsGrpcClient, TimeProvider);
     }
 
     // Two-item instance plan created by CreatorId, attached to EventId.
@@ -368,10 +370,48 @@ public class RunServiceTests : UnitTestBase
     // ---------- Get ----------
 
     [Test]
-    public async Task GetByEventIdAsync_NoRun_ReturnsNull()
+    public async Task GetByEventIdAsync_Creator_NoRunYet_ReturnsNullWithoutCallingEventsService()
     {
-        // Arrange
+        // Arrange — a plan is attached (so "creator" is well-defined) but no run has started yet.
+        var plan = BuildPlan();
+        StubPlanQuery(plan);
         StubNoRun();
+
+        // Act
+        var result = await _sut.GetByEventIdAsync(EventId, CreatorId);
+
+        // Assert
+        result.Should().BeNull();
+        await _eventsGrpcClient.DidNotReceive().IsEventParticipantAsync(Arg.Any<Guid>(), Arg.Any<Guid>());
+    }
+
+    [Test]
+    public async Task GetByEventIdAsync_UnrelatedUser_NoRunYet_ThrowsForbiddenSameAsWhenRunExists()
+    {
+        // Arrange — the regression this guards: an unauthorized caller must get the identical
+        // response whether or not a run exists yet. Without gating before the run fetch, "no run"
+        // returned 200 null while "run exists" returned 403, leaking the run's existence.
+        var plan = BuildPlan();
+        StubPlanQuery(plan);
+        StubNoRun();
+        _eventsGrpcClient.IsEventParticipantAsync(EventId, OtherUserId).Returns((false, true));
+        _eventsGrpcClient.IsEventAdminAsync(EventId, OtherUserId).Returns(false);
+
+        // Act
+        var act = () => _sut.GetByEventIdAsync(EventId, OtherUserId);
+
+        // Assert
+        await act.Should().ThrowAsync<ForbiddenException>();
+    }
+
+    [Test]
+    public async Task GetByEventIdAsync_NoPlanAttached_ParticipantReturnsNull()
+    {
+        // Arrange — nothing has been created for this event at all yet; a legitimate participant
+        // must still be able to observe "no run" rather than being denied.
+        _planRepository.Query().Returns(new List<TrainingPlan>().BuildMock());
+        StubNoRun();
+        _eventsGrpcClient.IsEventParticipantAsync(EventId, OtherUserId).Returns((true, true));
 
         // Act
         var result = await _sut.GetByEventIdAsync(EventId, OtherUserId);
@@ -381,7 +421,22 @@ public class RunServiceTests : UnitTestBase
     }
 
     [Test]
-    public async Task GetByEventIdAsync_NonCreator_ReturnsDtoWithCanControlFalse()
+    public async Task GetByEventIdAsync_EventDoesNotExist_ThrowsNotFound()
+    {
+        // Arrange — mirrors TrainingPlanService.GetByEventIdAsync's eventExists-404 vs
+        // not-participant-403 distinction.
+        _planRepository.Query().Returns(new List<TrainingPlan>().BuildMock());
+        _eventsGrpcClient.IsEventParticipantAsync(EventId, OtherUserId).Returns((false, false));
+
+        // Act
+        var act = () => _sut.GetByEventIdAsync(EventId, OtherUserId);
+
+        // Assert
+        await act.Should().ThrowAsync<EntityNotFoundException>();
+    }
+
+    [Test]
+    public async Task GetByEventIdAsync_Creator_ReturnsDtoWithCanControlTrueWithoutCallingEventsService()
     {
         // Arrange
         var plan = BuildPlan();
@@ -390,12 +445,70 @@ public class RunServiceTests : UnitTestBase
         StubExistingRun(run);
 
         // Act
+        var result = await _sut.GetByEventIdAsync(EventId, CreatorId);
+
+        // Assert
+        result.Should().NotBeNull();
+        result!.CanControl.Should().BeTrue();
+        result.ServerTime.Should().Be(Now);
+        await _eventsGrpcClient.DidNotReceive().IsEventParticipantAsync(Arg.Any<Guid>(), Arg.Any<Guid>());
+        await _eventsGrpcClient.DidNotReceive().IsEventAdminAsync(Arg.Any<Guid>(), Arg.Any<Guid>());
+    }
+
+    [Test]
+    public async Task GetByEventIdAsync_Participant_ReturnsDtoWithCanControlFalse()
+    {
+        // Arrange
+        var plan = BuildPlan();
+        StubPlanQuery(plan);
+        var run = RunningRunOnFirstItem(startedSecondsAgo: 10);
+        StubExistingRun(run);
+        _eventsGrpcClient.IsEventParticipantAsync(EventId, OtherUserId).Returns((true, true));
+
+        // Act
         var result = await _sut.GetByEventIdAsync(EventId, OtherUserId);
 
         // Assert
         result.Should().NotBeNull();
         result!.CanControl.Should().BeFalse();
         result.ServerTime.Should().Be(Now);
+    }
+
+    [Test]
+    public async Task GetByEventIdAsync_EventHostNonParticipant_ReturnsDtoWithCanControlFalse()
+    {
+        // Arrange — an organizer/co-organizer who isn't in the participant roster should still see the run.
+        var plan = BuildPlan();
+        StubPlanQuery(plan);
+        var run = RunningRunOnFirstItem(startedSecondsAgo: 10);
+        StubExistingRun(run);
+        _eventsGrpcClient.IsEventParticipantAsync(EventId, OtherUserId).Returns((false, true));
+        _eventsGrpcClient.IsEventAdminAsync(EventId, OtherUserId).Returns(true);
+
+        // Act
+        var result = await _sut.GetByEventIdAsync(EventId, OtherUserId);
+
+        // Assert
+        result.Should().NotBeNull();
+        result!.CanControl.Should().BeFalse();
+    }
+
+    [Test]
+    public async Task GetByEventIdAsync_UnrelatedUser_ThrowsForbidden()
+    {
+        // Arrange — neither the plan creator, nor a participant, nor an event host.
+        var plan = BuildPlan();
+        StubPlanQuery(plan);
+        var run = RunningRunOnFirstItem(startedSecondsAgo: 10);
+        StubExistingRun(run);
+        _eventsGrpcClient.IsEventParticipantAsync(EventId, OtherUserId).Returns((false, true));
+        _eventsGrpcClient.IsEventAdminAsync(EventId, OtherUserId).Returns(false);
+
+        // Act
+        var act = () => _sut.GetByEventIdAsync(EventId, OtherUserId);
+
+        // Assert
+        await act.Should().ThrowAsync<ForbiddenException>();
     }
 
     // ---------- Builders ----------
