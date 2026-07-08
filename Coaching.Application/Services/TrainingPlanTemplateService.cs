@@ -517,7 +517,21 @@ public class TrainingPlanService : ITrainingPlanService
 
     public async Task<PlanListResponseDto> GetClubPlansAsync(Guid clubId, Guid userId, PlanFilterRequest filter)
     {
-        // TODO: Verify user is club member when club service is available
+        // A foreign club's plans must not leak to a non-member who merely supplies that club's
+        // ID — mirrors the IsUserClubMemberAsync check FeedbackAuthorizationService already uses
+        // for club-scoped authorization elsewhere in this service.
+        if (!await _clubsClient.IsUserClubMemberAsync(userId, clubId))
+        {
+            return new PlanListResponseDto
+            {
+                Items = [],
+                TotalCount = 0,
+                Page = filter.Page,
+                PageSize = filter.PageSize,
+                TotalPages = 0
+            };
+        }
+
         var query = _planRepository.Query()
             .Where(t => t.ClubId == clubId && t.PlanType == PlanType.Template && t.Visibility != TemplateVisibility.Private);
 

@@ -59,7 +59,8 @@ public class DrillService : IDrillService
 
         if (filter.Scope.HasValue && userId.HasValue)
         {
-            query = query.ApplyScope(filter.Scope.Value, userId.Value, filter.ClubId);
+            var authorizedClubId = await ResolveAuthorizedClubIdAsync(filter.ClubId, userId.Value);
+            query = query.ApplyScope(filter.Scope.Value, userId.Value, authorizedClubId);
         }
         else
         {
@@ -319,11 +320,26 @@ public class DrillService : IDrillService
 
     public async Task<IEnumerable<DrillDto>> GetClubDrillsAsync(Guid clubId, Guid userId)
     {
+        if (!await _clubsClient.IsUserClubMemberAsync(userId, clubId))
+            return [];
+
         var drills = await _drillRepository.GetByClubAsync(clubId);
         var dtos = _mapper.Map<IEnumerable<DrillDto>>(drills);
         await EnrichWithClubInfoAsync(dtos);
         await EnrichWithUserInteractionsAsync(dtos, userId);
         return dtos;
+    }
+
+    // A club's non-public drills must only surface for a request scoped to that club when the
+    // requesting user is actually a member — mirrors the IsUserClubMemberAsync check
+    // FeedbackAuthorizationService already uses for club-scoped authorization elsewhere in this
+    // service. Returning null (rather than throwing) keeps ApplyScope's existing "no club
+    // context" convention: a non-member sees the same empty club slice as a request with no
+    // clubId at all, without failing the rest of a mixed-scope ("All") query.
+    private async Task<Guid?> ResolveAuthorizedClubIdAsync(Guid? clubId, Guid userId)
+    {
+        if (!clubId.HasValue) return null;
+        return await _clubsClient.IsUserClubMemberAsync(userId, clubId.Value) ? clubId : null;
     }
 
     // =========================================================================
