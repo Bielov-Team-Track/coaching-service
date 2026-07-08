@@ -15,17 +15,20 @@ public class RunService : IRunService
     private readonly ITrainingPlanRunRepository _runRepository;
     private readonly ITrainingPlanRepository _planRepository;
     private readonly IRunBroadcaster _broadcaster;
+    private readonly IEventsGrpcClient _eventsGrpcClient;
     private readonly TimeProvider _timeProvider;
 
     public RunService(
         ITrainingPlanRunRepository runRepository,
         ITrainingPlanRepository planRepository,
         IRunBroadcaster broadcaster,
+        IEventsGrpcClient eventsGrpcClient,
         TimeProvider timeProvider)
     {
         _runRepository = runRepository;
         _planRepository = planRepository;
         _broadcaster = broadcaster;
+        _eventsGrpcClient = eventsGrpcClient;
         _timeProvider = timeProvider;
     }
 
@@ -35,7 +38,22 @@ public class RunService : IRunService
         if (run == null) return null;
 
         var creatorId = await GetPlanCreatorIdAsync(run.PlanId);
-        return MapToDto(run, requestingUserId == creatorId);
+        var isCreator = requestingUserId == creatorId;
+
+        if (!isCreator && !await CanReadRunAsync(eventId, requestingUserId))
+            throw new ForbiddenException("Only event participants, hosts, or the plan creator can view this run");
+
+        return MapToDto(run, isCreator);
+    }
+
+    // Mirrors TrainingPlanService.GetByEventIdAsync's participant check (the sibling read for the
+    // same event-attached plan), extended with the event-admin/host check already used elsewhere
+    // in coaching-service (FeedbackAuthorizationService, TrainingPlanService.PromoteToTemplateAsync)
+    // for the case where a host isn't in the events-service participant roster.
+    private async Task<bool> CanReadRunAsync(Guid eventId, Guid userId)
+    {
+        var (isParticipant, _) = await _eventsGrpcClient.IsEventParticipantAsync(eventId, userId);
+        return isParticipant || await _eventsGrpcClient.IsEventAdminAsync(eventId, userId);
     }
 
     public async Task<RunDto> StartAsync(Guid eventId, Guid requestingUserId)

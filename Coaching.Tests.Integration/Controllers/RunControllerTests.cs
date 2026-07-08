@@ -90,6 +90,60 @@ public class RunControllerTests
     }
 
     [Test]
+    public async Task GetRun_AsPlanCreator_Returns200WithCanControlTrue()
+    {
+        // Arrange
+        var (eventId, _, _) = await SeedPlanWithTwoItemsAsync();
+        SetAuth(CreatorId);
+        await _client.PostAsync($"/v1/events/{eventId}/plans/run/start", null);
+
+        // Act
+        var response = await _client.GetAsync($"/v1/events/{eventId}/plans/run");
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var run = await response.Content.ReadFromJsonAsync<RunDto>(JsonOptions);
+        run!.CanControl.Should().BeTrue();
+    }
+
+    [Test]
+    public async Task GetRun_AsEventParticipant_Returns200WithCanControlFalse()
+    {
+        // Arrange
+        var (eventId, _, _) = await SeedPlanWithTwoItemsAsync();
+        SetAuth(CreatorId);
+        await _client.PostAsync($"/v1/events/{eventId}/plans/run/start", null);
+        _factory.EventsGrpcClient.IsEventParticipantAsync(eventId, OtherUserId).Returns((true, true));
+        SetAuth(OtherUserId);
+
+        // Act
+        var response = await _client.GetAsync($"/v1/events/{eventId}/plans/run");
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var run = await response.Content.ReadFromJsonAsync<RunDto>(JsonOptions);
+        run!.CanControl.Should().BeFalse();
+    }
+
+    [Test]
+    public async Task GetRun_AsUnrelatedUser_Returns403()
+    {
+        // Arrange — not the creator, not a participant, not an event host.
+        var (eventId, _, _) = await SeedPlanWithTwoItemsAsync();
+        SetAuth(CreatorId);
+        await _client.PostAsync($"/v1/events/{eventId}/plans/run/start", null);
+        _factory.EventsGrpcClient.IsEventParticipantAsync(eventId, OtherUserId).Returns((false, true));
+        _factory.EventsGrpcClient.IsEventAdminAsync(eventId, OtherUserId).Returns(false);
+        SetAuth(OtherUserId);
+
+        // Act
+        var response = await _client.GetAsync($"/v1/events/{eventId}/plans/run");
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Test]
     public async Task StartRun_AsPlanCreator_Returns200RunningWithFirstItemCurrent()
     {
         // Arrange
