@@ -370,16 +370,69 @@ public class RunServiceTests : UnitTestBase
     // ---------- Get ----------
 
     [Test]
-    public async Task GetByEventIdAsync_NoRun_ReturnsNull()
+    public async Task GetByEventIdAsync_Creator_NoRunYet_ReturnsNullWithoutCallingEventsService()
     {
-        // Arrange
+        // Arrange — a plan is attached (so "creator" is well-defined) but no run has started yet.
+        var plan = BuildPlan();
+        StubPlanQuery(plan);
         StubNoRun();
+
+        // Act
+        var result = await _sut.GetByEventIdAsync(EventId, CreatorId);
+
+        // Assert
+        result.Should().BeNull();
+        await _eventsGrpcClient.DidNotReceive().IsEventParticipantAsync(Arg.Any<Guid>(), Arg.Any<Guid>());
+    }
+
+    [Test]
+    public async Task GetByEventIdAsync_UnrelatedUser_NoRunYet_ThrowsForbiddenSameAsWhenRunExists()
+    {
+        // Arrange — the regression this guards: an unauthorized caller must get the identical
+        // response whether or not a run exists yet. Without gating before the run fetch, "no run"
+        // returned 200 null while "run exists" returned 403, leaking the run's existence.
+        var plan = BuildPlan();
+        StubPlanQuery(plan);
+        StubNoRun();
+        _eventsGrpcClient.IsEventParticipantAsync(EventId, OtherUserId).Returns((false, true));
+        _eventsGrpcClient.IsEventAdminAsync(EventId, OtherUserId).Returns(false);
+
+        // Act
+        var act = () => _sut.GetByEventIdAsync(EventId, OtherUserId);
+
+        // Assert
+        await act.Should().ThrowAsync<ForbiddenException>();
+    }
+
+    [Test]
+    public async Task GetByEventIdAsync_NoPlanAttached_ParticipantReturnsNull()
+    {
+        // Arrange — nothing has been created for this event at all yet; a legitimate participant
+        // must still be able to observe "no run" rather than being denied.
+        _planRepository.Query().Returns(new List<TrainingPlan>().BuildMock());
+        StubNoRun();
+        _eventsGrpcClient.IsEventParticipantAsync(EventId, OtherUserId).Returns((true, true));
 
         // Act
         var result = await _sut.GetByEventIdAsync(EventId, OtherUserId);
 
         // Assert
         result.Should().BeNull();
+    }
+
+    [Test]
+    public async Task GetByEventIdAsync_EventDoesNotExist_ThrowsNotFound()
+    {
+        // Arrange — mirrors TrainingPlanService.GetByEventIdAsync's eventExists-404 vs
+        // not-participant-403 distinction.
+        _planRepository.Query().Returns(new List<TrainingPlan>().BuildMock());
+        _eventsGrpcClient.IsEventParticipantAsync(EventId, OtherUserId).Returns((false, false));
+
+        // Act
+        var act = () => _sut.GetByEventIdAsync(EventId, OtherUserId);
+
+        // Assert
+        await act.Should().ThrowAsync<EntityNotFoundException>();
     }
 
     [Test]

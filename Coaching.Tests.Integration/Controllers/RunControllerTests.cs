@@ -144,6 +144,41 @@ public class RunControllerTests
     }
 
     [Test]
+    public async Task GetRun_AsUnrelatedUser_NoRunStarted_Returns403SameAsWhenRunExists()
+    {
+        // Arrange — regression guard: an unauthorized caller must get the identical response
+        // whether or not a run has been started, so the run's existence never leaks. Only
+        // difference from GetRun_AsUnrelatedUser_Returns403 above is that /run/start is never
+        // called here.
+        var (eventId, _, _) = await SeedPlanWithTwoItemsAsync();
+        _factory.EventsGrpcClient.IsEventParticipantAsync(eventId, OtherUserId).Returns((false, true));
+        _factory.EventsGrpcClient.IsEventAdminAsync(eventId, OtherUserId).Returns(false);
+        SetAuth(OtherUserId);
+
+        // Act
+        var response = await _client.GetAsync($"/v1/events/{eventId}/plans/run");
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Test]
+    public async Task GetRun_EventDoesNotExist_Returns404()
+    {
+        // Arrange — mirrors TrainingPlanService.GetByEventIdAsync's eventExists-404 vs
+        // not-participant-403 distinction. No plan/run was ever seeded for this eventId.
+        var eventId = Guid.NewGuid();
+        _factory.EventsGrpcClient.IsEventParticipantAsync(eventId, OtherUserId).Returns((false, false));
+        SetAuth(OtherUserId);
+
+        // Act
+        var response = await _client.GetAsync($"/v1/events/{eventId}/plans/run");
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Test]
     public async Task StartRun_AsPlanCreator_Returns200RunningWithFirstItemCurrent()
     {
         // Arrange
