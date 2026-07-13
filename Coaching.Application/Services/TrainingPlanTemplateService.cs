@@ -7,6 +7,7 @@ using Coaching.Domain.Models.Templates;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Shared.DTOs.Errors;
 using Shared.Enums;
 using Shared.Exceptions;
 using Shared.Messaging.Contracts.Events.Coaching;
@@ -64,6 +65,8 @@ public class TrainingPlanService : ITrainingPlanService
     {
         if (string.IsNullOrWhiteSpace(request.Name))
             throw new BadRequestException("Plan name is required", ErrorCodeEnum.ValidationError);
+
+        ValidatePlanFields(request.Name, request.Description, request.Sections, request.Items);
 
         var plan = new TrainingPlan
         {
@@ -153,6 +156,8 @@ public class TrainingPlanService : ITrainingPlanService
 
     public async Task<TrainingPlanDetailDto> UpdateAsync(Guid id, UpdatePlanDto request, Guid userId)
     {
+        ValidatePlanFields(request.Name, request.Description, request.Sections, request.Items);
+
         var plan = await _planRepository.GetByIdWithDetailsAsync(id);
         if (plan == null)
             throw new EntityNotFoundException("Plan not found");
@@ -298,6 +303,8 @@ public class TrainingPlanService : ITrainingPlanService
 
     public async Task<TrainingPlanDetailDto> CreateEventPlanAsync(Guid eventId, CreateEventPlanDto request, Guid userId)
     {
+        ValidatePlanFields(request.Name, request.Description, request.Sections, request.Items);
+
         // Verify user is event admin (organizer/co-organizer)
         var isAdmin = await _eventsGrpcClient.IsEventAdminAsync(eventId, userId);
         if (!isAdmin)
@@ -435,6 +442,8 @@ public class TrainingPlanService : ITrainingPlanService
 
     public async Task<TrainingPlanDetailDto> PromoteToTemplateAsync(Guid planId, PromotePlanDto request, Guid userId)
     {
+        ValidatePlanFields(request.Name, null, null, null);
+
         var plan = await _planRepository.GetByIdWithDetailsAsync(planId);
         if (plan == null)
             throw new EntityNotFoundException("Plan not found");
@@ -508,7 +517,21 @@ public class TrainingPlanService : ITrainingPlanService
 
     public async Task<PlanListResponseDto> GetClubPlansAsync(Guid clubId, Guid userId, PlanFilterRequest filter)
     {
-        // TODO: Verify user is club member when club service is available
+        // A foreign club's plans must not leak to a non-member who merely supplies that club's
+        // ID — mirrors the IsUserClubMemberAsync check FeedbackAuthorizationService already uses
+        // for club-scoped authorization elsewhere in this service.
+        if (!await _clubsClient.IsUserClubMemberAsync(userId, clubId))
+        {
+            return new PlanListResponseDto
+            {
+                Items = [],
+                TotalCount = 0,
+                Page = filter.Page,
+                PageSize = filter.PageSize,
+                TotalPages = 0
+            };
+        }
+
         var query = _planRepository.Query()
             .Where(t => t.ClubId == clubId && t.PlanType == PlanType.Template && t.Visibility != TemplateVisibility.Private);
 
@@ -1174,6 +1197,38 @@ public class TrainingPlanService : ITrainingPlanService
 
         // Otherwise, deny access
         throw new ForbiddenException("You do not have permission to view this plan");
+    }
+
+    private static void ValidatePlanFields(
+        string? name,
+        string? description,
+        List<CreatePlanSectionDto>? sections,
+        List<CreatePlanItemDto>? items)
+    {
+        var errors = new List<FieldError>();
+
+        if (name?.Length > TrainingPlan.NameMaxLength)
+            errors.Add(new FieldError("name", "INVALID_LENGTH",
+                $"Plan name must be at most {TrainingPlan.NameMaxLength} characters"));
+
+        if (description?.Length > TrainingPlan.DescriptionMaxLength)
+            errors.Add(new FieldError("description", "INVALID_LENGTH",
+                $"Description must be at most {TrainingPlan.DescriptionMaxLength} characters"));
+
+        if (sections != null)
+            for (var i = 0; i < sections.Count; i++)
+                if (sections[i].Name?.Length > PlanSection.NameMaxLength)
+                    errors.Add(new FieldError($"sections[{i}].name", "INVALID_LENGTH",
+                        $"Section name must be at most {PlanSection.NameMaxLength} characters"));
+
+        if (items != null)
+            for (var i = 0; i < items.Count; i++)
+                if (items[i].Notes?.Length > PlanItem.NotesMaxLength)
+                    errors.Add(new FieldError($"items[{i}].notes", "INVALID_LENGTH",
+                        $"Item notes must be at most {PlanItem.NotesMaxLength} characters"));
+
+        if (errors.Count > 0)
+            throw new ValidationException("One or more fields exceed their maximum length", errors);
     }
 
     private async Task ValidatePlanEditAsync(TrainingPlan plan, Guid userId)

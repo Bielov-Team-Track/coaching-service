@@ -1,0 +1,332 @@
+using Coaching.Application.DTOs.Templates;
+using Coaching.Application.Interfaces.Repositories;
+using Coaching.Application.Interfaces.Services;
+using Coaching.Domain.Enums;
+using Coaching.Domain.Models.Templates;
+using Microsoft.EntityFrameworkCore;
+using Shared.Exceptions;
+
+namespace Coaching.Application.Services;
+
+public class RunService : IRunService
+{
+    private const int SecondsPerMinute = 60;
+
+    private readonly ITrainingPlanRunRepository _runRepository;
+    private readonly ITrainingPlanRepository _planRepository;
+    private readonly IRunBroadcaster _broadcaster;
+    private readonly IEventsGrpcClient _eventsGrpcClient;
+    private readonly TimeProvider _timeProvider;
+
+    public RunService(
+        ITrainingPlanRunRepository runRepository,
+        ITrainingPlanRepository planRepository,
+        IRunBroadcaster broadcaster,
+        IEventsGrpcClient eventsGrpcClient,
+        TimeProvider timeProvider)
+    {
+        _runRepository = runRepository;
+        _planRepository = planRepository;
+        _broadcaster = broadcaster;
+        _eventsGrpcClient = eventsGrpcClient;
+        _timeProvider = timeProvider;
+    }
+
+    public async Task<RunDto?> GetByEventIdAsync(Guid eventId, Guid requestingUserId)
+    {
+        // Gate BEFORE touching the run table: resolving the plan creator first and checking it
+        // against requestingUserId lets a legitimate creator skip the events-service round trip,
+        // but an unauthorized caller must get the identical response (403/404) whether or not a
+        // run — or even a plan — exists yet, so nothing about the run's existence leaks. Mirrors
+        // TrainingPlanService.GetByEventIdAsync's gate-before-fetch order for the same reason.
+        var creatorId = await InstancePlanQuery(eventId)
+            .Select(p => (Guid?)p.CreatedByUserId)
+            .FirstOrDefaultAsync();
+        var isCreator = creatorId == requestingUserId;
+
+        if (!isCreator)
+            await EnsureCanReadRunAsync(eventId, requestingUserId);
+
+        var run = await _runRepository.GetByEventIdWithDetailsAsync(eventId);
+        return run == null ? null : MapToDto(run, isCreator);
+    }
+
+    // Mirrors TrainingPlanService.GetByEventIdAsync's participant/eventExists check (the sibling
+    // read for the same event-attached plan) exactly, extended with the event-admin/host check
+    // already used elsewhere in coaching-service (FeedbackAuthorizationService,
+    // TrainingPlanService.PromoteToTemplateAsync) for the case where a host isn't in the
+    // events-service participant roster.
+    private async Task EnsureCanReadRunAsync(Guid eventId, Guid userId)
+    {
+        var (isParticipant, eventExists) = await _eventsGrpcClient.IsEventParticipantAsync(eventId, userId);
+        if (!eventExists)
+            throw new EntityNotFoundException("Event not found");
+
+        if (!isParticipant && !await _eventsGrpcClient.IsEventAdminAsync(eventId, userId))
+            throw new ForbiddenException("Only event participants, hosts, or the plan creator can view this run");
+    }
+
+    public async Task<RunDto> StartAsync(Guid eventId, Guid requestingUserId)
+    {
+        var plan = await GetInstancePlanOrThrowAsync(eventId);
+        EnsureCreator(plan, requestingUserId);
+
+        var now = Now();
+        var orderedItems = plan.Items.OrderBy(i => i.Order).ToList();
+        var firstItem = orderedItems.FirstOrDefault();
+
+        var run = await _runRepository.GetByEventIdWithDetailsAsync(eventId);
+
+        TrainingPlanRunItem NewRunItem(PlanItem item) => new()
+        {
+            RunId = run!.Id,
+            PlanItemId = item.Id,
+            DrillId = item.DrillId,
+            Order = item.Order,
+            PlannedDurationSeconds = item.Duration * SecondsPerMinute,
+            ActualElapsedSeconds = 0,
+            StartedAtUtc = item.Id == firstItem?.Id ? now : null,
+            CompletedAtUtc = null,
+        };
+
+        if (run == null)
+        {
+            run = new TrainingPlanRun
+            {
+                PlanId = plan.Id,
+                EventId = eventId,
+                StartedByUserId = requestingUserId
+            };
+            _runRepository.Add(run);
+
+            foreach (var item in orderedItems)
+            {
+                run.Items.Add(NewRunItem(item));
+            }
+        }
+        else
+        {
+            // Restart in place, reconciled to the CURRENT plan (it may have been edited on web
+            // between runs): reset rows whose plan item still exists, add rows for new plan items,
+            // drop rows whose plan item is gone. Reusing existing rows keeps them to plain UPDATEs;
+            // a blanket clear + re-add orphaned every child and made EF emit deletes that hit 0
+            // rows (DbUpdateConcurrencyException).
+            var planItemIds = orderedItems.Select(i => i.Id).ToHashSet();
+            foreach (var stale in run.Items.Where(ri => !planItemIds.Contains(ri.PlanItemId)).ToList())
+            {
+                run.Items.Remove(stale);
+            }
+
+            foreach (var item in orderedItems)
+            {
+                var runItem = run.Items.FirstOrDefault(ri => ri.PlanItemId == item.Id);
+                if (runItem == null)
+                {
+                    run.Items.Add(NewRunItem(item));
+                }
+                else
+                {
+                    runItem.DrillId = item.DrillId;
+                    runItem.Order = item.Order;
+                    runItem.PlannedDurationSeconds = item.Duration * SecondsPerMinute;
+                    runItem.ActualElapsedSeconds = 0;
+                    runItem.StartedAtUtc = item.Id == firstItem?.Id ? now : null;
+                    runItem.CompletedAtUtc = null;
+                }
+            }
+        }
+
+        run.StartedByUserId = requestingUserId;
+        run.Status = RunStatus.Running;
+        run.StartedAtUtc = now;
+        run.CompletedAtUtc = null;
+        run.CurrentItemId = firstItem?.Id;
+        run.CurrentItemStartedAtUtc = firstItem != null ? now : null;
+        run.CurrentItemPausedElapsedSeconds = 0;
+
+        await _runRepository.SaveChangesAsync();
+        return await BroadcastAsync(eventId, run, requestingUserId == plan.CreatedByUserId);
+    }
+
+    public async Task<RunDto> PauseAsync(Guid eventId, Guid requestingUserId)
+    {
+        var (run, isCreator) = await LoadForControlAsync(eventId, requestingUserId);
+
+        if (run.Status == RunStatus.Running)
+        {
+            run.CurrentItemPausedElapsedSeconds = ElapsedSeconds(run, Now());
+            run.CurrentItemStartedAtUtc = null;
+            run.Status = RunStatus.Paused;
+            await _runRepository.SaveChangesAsync();
+            return await BroadcastAsync(eventId, run, isCreator);
+        }
+
+        return MapToDto(run, isCreator);
+    }
+
+    public async Task<RunDto> ResumeAsync(Guid eventId, Guid requestingUserId)
+    {
+        var (run, isCreator) = await LoadForControlAsync(eventId, requestingUserId);
+
+        if (run.Status == RunStatus.Paused)
+        {
+            run.CurrentItemStartedAtUtc = Now().AddSeconds(-run.CurrentItemPausedElapsedSeconds);
+            run.Status = RunStatus.Running;
+            await _runRepository.SaveChangesAsync();
+            return await BroadcastAsync(eventId, run, isCreator);
+        }
+
+        return MapToDto(run, isCreator);
+    }
+
+    public async Task<RunDto> AdvanceAsync(Guid eventId, Guid fromItemId, Guid requestingUserId)
+    {
+        var (run, isCreator) = await LoadForControlAsync(eventId, requestingUserId);
+
+        // Guard against double-tap / concurrent advance.
+        if (run.CurrentItemId != fromItemId)
+            return MapToDto(run, isCreator);
+
+        FinalizeCurrentItem(run);
+
+        var ordered = run.Items.OrderBy(i => i.Order).ToList();
+        var currentOrder = ordered.First(c => c.PlanItemId == fromItemId).Order;
+        var nextItem = ordered.FirstOrDefault(i => i.Order > currentOrder
+            && i.CompletedAtUtc == null);
+
+        var now = Now();
+        if (nextItem == null)
+        {
+            run.Status = RunStatus.Completed;
+            run.CurrentItemId = null;
+            run.CurrentItemStartedAtUtc = null;
+            run.CompletedAtUtc = now;
+        }
+        else
+        {
+            run.CurrentItemId = nextItem.PlanItemId;
+            run.CurrentItemStartedAtUtc = now;
+            run.CurrentItemPausedElapsedSeconds = 0;
+            nextItem.StartedAtUtc = now;
+        }
+
+        await _runRepository.SaveChangesAsync();
+        return await BroadcastAsync(eventId, run, isCreator);
+    }
+
+    public async Task<RunDto> CompleteAsync(Guid eventId, Guid requestingUserId)
+    {
+        var (run, isCreator) = await LoadForControlAsync(eventId, requestingUserId);
+
+        if (run.Status == RunStatus.Completed)
+            return MapToDto(run, isCreator);
+
+        FinalizeCurrentItem(run);
+        run.Status = RunStatus.Completed;
+        run.CurrentItemId = null;
+        run.CurrentItemStartedAtUtc = null;
+        run.CompletedAtUtc = Now();
+
+        await _runRepository.SaveChangesAsync();
+        return await BroadcastAsync(eventId, run, isCreator);
+    }
+
+    private void FinalizeCurrentItem(TrainingPlanRun run)
+    {
+        if (run.CurrentItemId == null) return;
+        var current = run.Items.FirstOrDefault(i => i.PlanItemId == run.CurrentItemId);
+        if (current == null) return;
+
+        var now = Now();
+        current.ActualElapsedSeconds = ElapsedSeconds(run, now);
+        current.CompletedAtUtc = now;
+    }
+
+    private static int ElapsedSeconds(TrainingPlanRun run, DateTime now)
+    {
+        if (run.Status == RunStatus.Paused || run.CurrentItemStartedAtUtc == null)
+            return run.CurrentItemPausedElapsedSeconds;
+
+        var elapsed = (now - run.CurrentItemStartedAtUtc.Value).TotalSeconds;
+        return elapsed < 0 ? 0 : (int)elapsed;
+    }
+
+    private async Task<(TrainingPlanRun run, bool isCreator)> LoadForControlAsync(Guid eventId, Guid requestingUserId)
+    {
+        var run = await _runRepository.GetByEventIdWithDetailsAsync(eventId)
+            ?? throw new EntityNotFoundException("No run has been started for this event");
+
+        var creatorId = await GetPlanCreatorIdAsync(run.PlanId);
+        if (requestingUserId != creatorId)
+            throw new ForbiddenException("Only the plan creator can control the run");
+
+        return (run, true);
+    }
+
+    private IQueryable<TrainingPlan> InstancePlanQuery(Guid eventId) =>
+        _planRepository.Query().Where(p => p.EventId == eventId && p.PlanType == PlanType.Instance && !p.IsDeleted);
+
+    private async Task<TrainingPlan> GetInstancePlanOrThrowAsync(Guid eventId)
+    {
+        var plan = await InstancePlanQuery(eventId).Include(p => p.Items).FirstOrDefaultAsync()
+            ?? throw new EntityNotFoundException("No training plan is attached to this event");
+
+        return plan;
+    }
+
+    private async Task<Guid> GetPlanCreatorIdAsync(Guid planId)
+    {
+        var creatorId = await _planRepository.Query()
+            .Where(p => p.Id == planId)
+            .Select(p => (Guid?)p.CreatedByUserId)
+            .FirstOrDefaultAsync()
+            ?? throw new EntityNotFoundException("Training plan not found");
+
+        return creatorId;
+    }
+
+    private static void EnsureCreator(TrainingPlan plan, Guid requestingUserId)
+    {
+        if (plan.CreatedByUserId != requestingUserId)
+            throw new ForbiddenException("Only the plan creator can control the run");
+    }
+
+    private async Task<RunDto> BroadcastAsync(Guid eventId, TrainingPlanRun run, bool canControl)
+    {
+        var dto = MapToDto(run, canControl);
+        await _broadcaster.BroadcastRunUpdatedAsync(eventId, dto);
+        return dto;
+    }
+
+    private RunDto MapToDto(TrainingPlanRun run, bool canControl) => new()
+    {
+        Id = run.Id,
+        PlanId = run.PlanId,
+        EventId = run.EventId,
+        StartedByUserId = run.StartedByUserId,
+        Status = run.Status,
+        CurrentItemId = run.CurrentItemId,
+        CurrentItemStartedAt = run.CurrentItemStartedAtUtc,
+        CurrentItemPausedElapsedSeconds = run.CurrentItemPausedElapsedSeconds,
+        StartedAt = run.StartedAtUtc,
+        CompletedAt = run.CompletedAtUtc,
+        ServerTime = Now(),
+        CanControl = canControl,
+        Items = run.Items
+            .OrderBy(i => i.Order)
+            .Select(i => new RunItemDto
+            {
+                Id = i.Id,
+                PlanItemId = i.PlanItemId,
+                DrillId = i.DrillId,
+                Order = i.Order,
+                PlannedDurationSeconds = i.PlannedDurationSeconds,
+                ActualElapsedSeconds = i.ActualElapsedSeconds,
+                StartedAt = i.StartedAtUtc,
+                CompletedAt = i.CompletedAtUtc
+            })
+            .ToList()
+    };
+
+    private DateTime Now() => _timeProvider.GetUtcNow().UtcDateTime;
+}

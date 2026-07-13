@@ -20,6 +20,7 @@ public class FeedbackRepository : BaseRepository<Feedback>, IFeedbackRepository
                 .ThenInclude(ip => ip.AttachedDrills.Where(d => !d.IsDeleted))
             .Include(f => f.ImprovementPoints)
                 .ThenInclude(ip => ip.MediaLinks.Where(m => !m.IsDeleted))
+            .Include(f => f.Media.Where(m => !m.IsDeleted).OrderBy(m => m.Order))
             .Include(f => f.Praise)
             .FirstOrDefaultAsync(f => f.Id == id && !f.IsDeleted);
     }
@@ -28,6 +29,7 @@ public class FeedbackRepository : BaseRepository<Feedback>, IFeedbackRepository
     {
         return await _dbSet
             .Include(f => f.ImprovementPoints.Where(ip => !ip.IsDeleted).OrderBy(ip => ip.Order))
+            .Include(f => f.Media.Where(m => !m.IsDeleted).OrderBy(m => m.Order))
             .Include(f => f.Praise)
             .Where(f => f.RecipientUserId == userId && f.SharedWithPlayer && !f.IsDeleted)
             .OrderByDescending(f => f.CreatedAt)
@@ -40,6 +42,7 @@ public class FeedbackRepository : BaseRepository<Feedback>, IFeedbackRepository
     {
         return await _dbSet
             .Include(f => f.ImprovementPoints.Where(ip => !ip.IsDeleted).OrderBy(ip => ip.Order))
+            .Include(f => f.Media.Where(m => !m.IsDeleted).OrderBy(m => m.Order))
             .Include(f => f.Praise)
             .Where(f => f.CoachUserId == userId && !f.IsDeleted)
             .OrderByDescending(f => f.CreatedAt)
@@ -52,9 +55,19 @@ public class FeedbackRepository : BaseRepository<Feedback>, IFeedbackRepository
     {
         return await _dbSet
             .Include(f => f.ImprovementPoints.Where(ip => !ip.IsDeleted).OrderBy(ip => ip.Order))
+            .Include(f => f.Media.Where(m => !m.IsDeleted).OrderBy(m => m.Order))
             .Include(f => f.Praise)
             .Where(f => f.EventId == eventId && !f.IsDeleted)
             .OrderByDescending(f => f.CreatedAt)
             .ToListAsync();
+    }
+
+    public async Task<int> GetUnseenCountAsync(Guid recipientUserId)
+    {
+        return await _dbSet
+            .CountAsync(f => f.RecipientUserId == recipientUserId
+                && f.SharedWithPlayer
+                && f.SeenAt == null
+                && !f.IsDeleted);
     }
 }

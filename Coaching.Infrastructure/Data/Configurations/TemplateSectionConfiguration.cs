@@ -13,7 +13,7 @@ public class PlanSectionConfiguration : IEntityTypeConfiguration<PlanSection>
 
         builder.Property(s => s.Name)
             .IsRequired()
-            .HasMaxLength(100);
+            .HasMaxLength(PlanSection.NameMaxLength);
 
         builder.HasIndex(s => new { s.TemplateId, s.Order });
 

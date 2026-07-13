@@ -66,6 +66,8 @@ namespace Coaching
             services.AddGrpc();
             services.AddGrpcHealthChecks();
 
+            services.AddSingleton(TimeProvider.System);
+
             // Database
             var connectionString = Configuration.GetConnectionString("DefaultConnection");
             services.AddDbContext<CoachingDbContext>(options =>
@@ -89,6 +91,7 @@ namespace Coaching
             services.AddScoped<IPlanLikeRepository, PlanLikeRepository>();
             services.AddScoped<IPlanBookmarkRepository, PlanBookmarkRepository>();
             services.AddScoped<IPlanCommentRepository, PlanCommentRepository>();
+            services.AddScoped<ITrainingPlanRunRepository, TrainingPlanRunRepository>();
 
             // Feedback repositories
             services.AddScoped<IFeedbackRepository, FeedbackRepository>();
@@ -120,6 +123,8 @@ namespace Coaching
             // AutoMapper & Application services
             services.AddApplicationMappings();
             services.AddApplicationServices();
+            services.AddSingleton(TimeProvider.System);
+            services.AddScoped<Coaching.Application.Interfaces.Services.IRunBroadcaster, Coaching.Hubs.SignalRRunBroadcaster>();
 
             services.AddSharedDataAccess();
 
@@ -190,7 +195,7 @@ namespace Coaching
             services.AddAuthorization();
 
             // SignalR
-            services.AddSignalR(options =>
+            var signalRBuilder = services.AddSignalR(options =>
             {
                 options.EnableDetailedErrors = Environment.IsDevelopment();
                 options.KeepAliveInterval = TimeSpan.FromSeconds(15);
@@ -203,6 +208,15 @@ namespace Coaching
                 options.PayloadSerializerOptions.Converters.Add(
                     new System.Text.Json.Serialization.JsonStringEnumConverter());
             });
+
+            var signalRRedisConnection = Configuration.GetValue<string>("Redis:ConnectionString");
+            if (!string.IsNullOrWhiteSpace(signalRRedisConnection))
+            {
+                signalRBuilder.AddStackExchangeRedis(signalRRedisConnection, options =>
+                {
+                    options.Configuration.ChannelPrefix = StackExchange.Redis.RedisChannel.Literal("coaching");
+                });
+            }
 
             // Swagger
             services.AddEndpointsApiExplorer();
@@ -259,6 +273,7 @@ namespace Coaching
             {
                 endpoints.MapControllers();
                 endpoints.MapHub<Coaching.Hubs.EvaluationHub>("/hubs/evaluation");
+                endpoints.MapHub<Coaching.Hubs.TrainingRunHub>("/hubs/trainingrun");
                 endpoints.MapGrpcService<Grpc.CoachingInternalServiceImpl>();
                 endpoints.MapHealthChecks("/health");
                 endpoints.MapGrpcHealthChecksService();

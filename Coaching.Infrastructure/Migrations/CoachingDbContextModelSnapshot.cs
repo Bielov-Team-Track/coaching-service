@@ -988,6 +988,9 @@ namespace Coaching.Infrastructure.Migrations
                     b.Property<Guid>("RecipientUserId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTime?>("SeenAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<bool>("SharedWithPlayer")
                         .HasColumnType("boolean");
 
@@ -1007,6 +1010,46 @@ namespace Coaching.Infrastructure.Migrations
                     b.HasIndex("RecipientUserId");
 
                     b.ToTable("Feedbacks");
+                });
+
+            modelBuilder.Entity("Coaching.Domain.Models.Feedback.FeedbackMedia", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("FeedbackId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Title")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FeedbackId");
+
+                    b.ToTable("FeedbackMedia");
                 });
 
             modelBuilder.Entity("Coaching.Domain.Models.Feedback.ImprovementPoint", b =>
@@ -1386,8 +1429,8 @@ namespace Coaching.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<string>("Description")
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
+                        .HasMaxLength(10000)
+                        .HasColumnType("character varying(10000)");
 
                     b.Property<Guid?>("EventId")
                         .HasColumnType("uuid");
@@ -1443,6 +1486,104 @@ namespace Coaching.Infrastructure.Migrations
                     b.HasIndex("Visibility");
 
                     b.ToTable("TrainingPlanTemplates", (string)null);
+                });
+
+            modelBuilder.Entity("Coaching.Domain.Models.Templates.TrainingPlanRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CurrentItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("CurrentItemPausedElapsedSeconds")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("CurrentItemStartedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("PlanId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("StartedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("StartedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventId");
+
+                    b.HasIndex("PlanId")
+                        .IsUnique();
+
+                    b.ToTable("TrainingPlanRuns", (string)null);
+                });
+
+            modelBuilder.Entity("Coaching.Domain.Models.Templates.TrainingPlanRunItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ActualElapsedSeconds")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("DrillId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("PlanItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("PlannedDurationSeconds")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("StartedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RunId", "Order");
+
+                    b.ToTable("TrainingPlanRunItems", (string)null);
                 });
 
             modelBuilder.Entity("MassTransit.EntityFrameworkCoreIntegration.InboxState", b =>
@@ -1955,6 +2096,17 @@ namespace Coaching.Infrastructure.Migrations
                     b.Navigation("Evaluation");
                 });
 
+            modelBuilder.Entity("Coaching.Domain.Models.Feedback.FeedbackMedia", b =>
+                {
+                    b.HasOne("Coaching.Domain.Models.Feedback.Feedback", "Feedback")
+                        .WithMany("Media")
+                        .HasForeignKey("FeedbackId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Feedback");
+                });
+
             modelBuilder.Entity("Coaching.Domain.Models.Feedback.ImprovementPoint", b =>
                 {
                     b.HasOne("Coaching.Domain.Models.Feedback.Feedback", "Feedback")
@@ -2113,6 +2265,28 @@ namespace Coaching.Infrastructure.Migrations
                     b.Navigation("Creator");
                 });
 
+            modelBuilder.Entity("Coaching.Domain.Models.Templates.TrainingPlanRun", b =>
+                {
+                    b.HasOne("Coaching.Domain.Models.Templates.TrainingPlan", "Plan")
+                        .WithMany()
+                        .HasForeignKey("PlanId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Plan");
+                });
+
+            modelBuilder.Entity("Coaching.Domain.Models.Templates.TrainingPlanRunItem", b =>
+                {
+                    b.HasOne("Coaching.Domain.Models.Templates.TrainingPlanRun", "Run")
+                        .WithMany("Items")
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Run");
+                });
+
             modelBuilder.Entity("MassTransit.EntityFrameworkCoreIntegration.OutboxMessage", b =>
                 {
                     b.HasOne("MassTransit.EntityFrameworkCoreIntegration.OutboxState", null)
@@ -2203,6 +2377,8 @@ namespace Coaching.Infrastructure.Migrations
                 {
                     b.Navigation("ImprovementPoints");
 
+                    b.Navigation("Media");
+
                     b.Navigation("Praise");
                 });
 
@@ -2234,6 +2410,11 @@ namespace Coaching.Infrastructure.Migrations
                     b.Navigation("Likes");
 
                     b.Navigation("Sections");
+                });
+
+            modelBuilder.Entity("Coaching.Domain.Models.Templates.TrainingPlanRun", b =>
+                {
+                    b.Navigation("Items");
                 });
 #pragma warning restore 612, 618
         }

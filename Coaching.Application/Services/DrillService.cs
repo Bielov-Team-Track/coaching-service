@@ -57,48 +57,24 @@ public class DrillService : IDrillService
     {
         var query = _drillRepository.Query();
 
-        // Default to only public drills for general listing
-        query = query.Where(d => d.Visibility == DrillVisibility.Public);
-
-        if (filter.Category.HasValue)
-            query = query.Where(d => d.Category == filter.Category.Value);
-
-        if (filter.Intensity.HasValue)
-            query = query.Where(d => d.Intensity == filter.Intensity.Value);
-
-        if (filter.Skill.HasValue)
-            query = query.Where(d => d.Skills.Contains(filter.Skill.Value));
-
-        if (filter.CreatedByUserId.HasValue)
-            query = query.Where(d => d.CreatedByUserId == filter.CreatedByUserId.Value);
-
-        if (filter.ClubId.HasValue)
-            query = query.Where(d => d.ClubId == filter.ClubId.Value);
-
-        if (!string.IsNullOrWhiteSpace(filter.SearchTerm))
+        if (filter.Scope.HasValue && userId.HasValue)
         {
-            var searchLower = filter.SearchTerm.ToLower();
-            query = query.Where(d =>
-                d.Name.ToLower().Contains(searchLower) ||
-                (d.Description != null && d.Description.ToLower().Contains(searchLower)));
+            var authorizedClubId = await ResolveAuthorizedClubIdAsync(filter.ClubId, userId.Value);
+            query = query.ApplyScope(filter.Scope.Value, userId.Value, authorizedClubId);
+        }
+        else
+        {
+            // Legacy public-only listing (web + anonymous), with optional author/club narrowing.
+            query = query.Where(d => d.Visibility == DrillVisibility.Public);
+
+            if (filter.CreatedByUserId.HasValue)
+                query = query.Where(d => d.CreatedByUserId == filter.CreatedByUserId.Value);
+
+            if (filter.ClubId.HasValue)
+                query = query.Where(d => d.ClubId == filter.ClubId.Value);
         }
 
-        // Equipment filter - drills must have ALL specified equipment
-        if (filter.Equipment != null && filter.Equipment.Length > 0)
-        {
-            var equipmentLower = filter.Equipment.Select(e => e.ToLower()).ToArray();
-            foreach (var equipName in equipmentLower)
-            {
-                if (filter.RequiredEquipmentOnly == true)
-                {
-                    query = query.Where(d => d.Equipment.Any(e => !e.IsOptional && e.Name.ToLower().Contains(equipName)));
-                }
-                else
-                {
-                    query = query.Where(d => d.Equipment.Any(e => e.Name.ToLower().Contains(equipName)));
-                }
-            }
-        }
+        query = query.ApplyAttributeFilters(filter);
 
         // Get total count before pagination
         var totalCount = await query.CountAsync();
@@ -344,11 +320,26 @@ public class DrillService : IDrillService
 
     public async Task<IEnumerable<DrillDto>> GetClubDrillsAsync(Guid clubId, Guid userId)
     {
+        if (!await _clubsClient.IsUserClubMemberAsync(userId, clubId))
+            return [];
+
         var drills = await _drillRepository.GetByClubAsync(clubId);
         var dtos = _mapper.Map<IEnumerable<DrillDto>>(drills);
         await EnrichWithClubInfoAsync(dtos);
         await EnrichWithUserInteractionsAsync(dtos, userId);
         return dtos;
+    }
+
+    // A club's non-public drills must only surface for a request scoped to that club when the
+    // requesting user is actually a member — mirrors the IsUserClubMemberAsync check
+    // FeedbackAuthorizationService already uses for club-scoped authorization elsewhere in this
+    // service. Returning null (rather than throwing) keeps ApplyScope's existing "no club
+    // context" convention: a non-member sees the same empty club slice as a request with no
+    // clubId at all, without failing the rest of a mixed-scope ("All") query.
+    private async Task<Guid?> ResolveAuthorizedClubIdAsync(Guid? clubId, Guid userId)
+    {
+        if (!clubId.HasValue) return null;
+        return await _clubsClient.IsUserClubMemberAsync(userId, clubId.Value) ? clubId : null;
     }
 
     // =========================================================================
