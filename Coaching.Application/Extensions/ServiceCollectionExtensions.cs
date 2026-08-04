@@ -7,15 +7,12 @@ namespace Coaching.Application.Extensions;
 
 public static class ServiceCollectionExtensions
 {
+    // Scanned by assembly rather than listing profiles: only the assembly overload also registers
+    // IValueResolver implementations (SignedFeedbackMediaUrlResolver & co) in the container. Without
+    // them AutoMapper falls back to Activator.CreateInstance and every map that uses one throws.
     public static IServiceCollection AddApplicationMappings(this IServiceCollection services)
     {
-        services.AddAutoMapper(cfg =>
-        {
-            cfg.AddProfile<DrillMappingProfile>();
-            cfg.AddProfile<PlanMappingProfile>();
-            cfg.AddProfile<EvaluationMappingProfile>();
-            cfg.AddProfile<FeedbackMappingProfile>();
-        });
+        services.AddAutoMapper(typeof(FeedbackMappingProfile).Assembly);
         return services;
     }
 
