@@ -130,6 +130,10 @@ public class DrillDto
     public int? MinPlayers { get; set; }
     public int? MaxPlayers { get; set; }
 
+    /// <summary>Rich text from the drill editor. Prefer this; the arrays below are flattened from it.</summary>
+    public string? InstructionsHtml { get; set; }
+    public string? CoachingPointsHtml { get; set; }
+
     public string[] Instructions { get; set; } = [];
     public string[] CoachingPoints { get; set; } = [];
     public ICollection<DrillEquipmentDto> Equipment { get; set; } = new List<DrillEquipmentDto>();
@@ -187,7 +191,9 @@ public record CreateDrillDto(
     CreateDrillVariationInput[] Variations,
     DrillEquipmentInput[] Equipment,
     string? VideoUrl,
-    Guid? ClubId
+    Guid? ClubId,
+    string? InstructionsHtml = null,
+    string? CoachingPointsHtml = null
 );
 
 public record UpdateDrillDto(
@@ -206,7 +212,9 @@ public record UpdateDrillDto(
     CreateDrillVariationInput[] Variations,
     DrillEquipmentInput[] Equipment,
     string? VideoUrl,
-    Guid? ClubId
+    Guid? ClubId,
+    string? InstructionsHtml = null,
+    string? CoachingPointsHtml = null
 );
 
 public class DrillFilterRequest

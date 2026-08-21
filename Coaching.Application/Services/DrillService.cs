@@ -3,6 +3,7 @@ using AutoMapper;
 using Coaching.Application.DTOs.Drills;
 using Coaching.Application.Interfaces.Repositories;
 using Coaching.Application.Interfaces.Services;
+using Coaching.Application.RichText;
 using Coaching.Domain.Enums;
 using Coaching.Domain.Models.Drills;
 using Microsoft.EntityFrameworkCore;
@@ -149,6 +150,9 @@ public class DrillService : IDrillService
                 throw new BadRequestException($"Variation drill(s) not found: {string.Join(", ", missingIds)}", ErrorCodeEnum.EntityNotFound);
         }
 
+        var instructions = ResolveProse(request.InstructionsHtml, request.Instructions, ordered: true);
+        var coachingPoints = ResolveProse(request.CoachingPointsHtml, request.CoachingPoints, ordered: false);
+
         var drill = new Drill
         {
             Name = request.Name,
@@ -160,8 +164,10 @@ public class DrillService : IDrillService
             Duration = request.Duration,
             MinPlayers = request.MinPlayers,
             MaxPlayers = request.MaxPlayers,
-            Instructions = request.Instructions ?? [],
-            CoachingPoints = request.CoachingPoints ?? [],
+            InstructionsHtml = instructions.Html,
+            Instructions = instructions.Lines,
+            CoachingPointsHtml = coachingPoints.Html,
+            CoachingPoints = coachingPoints.Lines,
             VideoUrl = request.VideoUrl,
             CreatedByUserId = userId,
             ClubId = request.ClubId,
@@ -246,8 +252,12 @@ public class DrillService : IDrillService
         drill.Duration = request.Duration;
         drill.MinPlayers = request.MinPlayers;
         drill.MaxPlayers = request.MaxPlayers;
-        drill.Instructions = request.Instructions ?? [];
-        drill.CoachingPoints = request.CoachingPoints ?? [];
+        var instructions = ResolveProse(request.InstructionsHtml, request.Instructions, ordered: true);
+        var coachingPoints = ResolveProse(request.CoachingPointsHtml, request.CoachingPoints, ordered: false);
+        drill.InstructionsHtml = instructions.Html;
+        drill.Instructions = instructions.Lines;
+        drill.CoachingPointsHtml = coachingPoints.Html;
+        drill.CoachingPoints = coachingPoints.Lines;
         drill.VideoUrl = request.VideoUrl;
         drill.ClubId = request.ClubId;
         drill.UpdatedAt = DateTime.UtcNow;
@@ -720,4 +730,20 @@ public class DrillService : IDrillService
             _logger.LogWarning(ex, "Failed to enrich drills with club info");
         }
     }
+
+    /// <summary>
+    /// HTML is the source of truth when the client sends it; otherwise it is built
+    /// from the legacy arrays. Either way both columns are written, so every reader
+    /// sees the same content whichever shape it asks for.
+    /// </summary>
+    private static (string? Html, string[] Lines) ResolveProse(string? html, string[]? lines, bool ordered)
+    {
+        var sanitized = DrillRichText.Sanitize(html);
+        if (sanitized is not null)
+            return (sanitized, DrillRichText.ToLines(sanitized));
+
+        var fallback = lines ?? [];
+        return (DrillRichText.FromLines(fallback, ordered), fallback);
+    }
+
 }

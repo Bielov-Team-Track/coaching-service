@@ -1,0 +1,86 @@
+using AngleSharp.Html.Parser;
+using Ganss.Xss;
+
+namespace Coaching.Application.RichText;
+
+/// <summary>
+/// Drill prose (how it runs, coaching points) is authored in a rich text editor
+/// and stored as HTML. Clients that predate the editor read flat string arrays,
+/// so every write sanitizes the HTML and flattens it to lines for them. The HTML
+/// is the source of truth; the arrays are derived and never written directly.
+/// </summary>
+public static class DrillRichText
+{
+    private const int MaxLines = 200;
+    private const int MaxLineLength = 2000;
+
+    private static readonly HtmlSanitizer Sanitizer = CreateSanitizer();
+    private static readonly HtmlParser Parser = new();
+    private static readonly System.Text.RegularExpressions.Regex Whitespace =
+        new(@"\s+", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    private static HtmlSanitizer CreateSanitizer()
+    {
+        var sanitizer = new HtmlSanitizer();
+        sanitizer.AllowedTags.Clear();
+        sanitizer.AllowedTags.UnionWith(new[] { "p", "br", "strong", "b", "em", "i", "u", "s", "a", "ul", "ol", "li" });
+        sanitizer.AllowedAttributes.Clear();
+        sanitizer.AllowedAttributes.UnionWith(new[] { "href", "target", "rel" });
+        sanitizer.AllowedSchemes.Clear();
+        sanitizer.AllowedSchemes.UnionWith(new[] { "http", "https" });
+        return sanitizer;
+    }
+
+    /// <summary>Sanitized HTML, or null when the editor sent an empty document.</summary>
+    public static string? Sanitize(string? html)
+    {
+        if (string.IsNullOrWhiteSpace(html)) return null;
+
+        var clean = Sanitizer.Sanitize(html);
+        return HasText(clean) ? clean : null;
+    }
+
+    /// <summary>
+    /// One line per block, matching what the editor shows. Keeps the legacy arrays
+    /// in step with the HTML.
+    /// </summary>
+    public static string[] ToLines(string? html)
+    {
+        if (string.IsNullOrWhiteSpace(html)) return [];
+
+        var document = Parser.ParseDocument(html);
+        if (document.Body is null) return [];
+
+        return document.Body
+            .QuerySelectorAll("li, p")
+            // A list item's own paragraph would otherwise produce the line twice.
+            .Where(element => element.TagName == "LI" || element.Closest("li") is null)
+            .Select(element => Collapse(element.TextContent))
+            .Where(line => line.Length > 0)
+            .Take(MaxLines)
+            .ToArray();
+    }
+
+    /// <summary>Wraps legacy plain lines as list HTML, for backfilling rows written before the editor.</summary>
+    public static string? FromLines(IReadOnlyCollection<string> lines, bool ordered)
+    {
+        var items = lines.Select(Collapse).Where(line => line.Length > 0).ToArray();
+        if (items.Length == 0) return null;
+
+        var tag = ordered ? "ol" : "ul";
+        var body = string.Concat(items.Select(line => $"<li><p>{System.Net.WebUtility.HtmlEncode(line)}</p></li>"));
+        return $"<{tag}>{body}</{tag}>";
+    }
+
+    private static bool HasText(string html)
+    {
+        var document = Parser.ParseDocument(html);
+        return !string.IsNullOrWhiteSpace(document.Body?.TextContent);
+    }
+
+    private static string Collapse(string? text)
+    {
+        var collapsed = Whitespace.Replace(text ?? "", " ").Trim();
+        return collapsed.Length > MaxLineLength ? collapsed[..MaxLineLength] : collapsed;
+    }
+}

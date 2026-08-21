@@ -19,6 +19,12 @@ public class Drill : BaseEntity
     public int? MinPlayers { get; set; }
     public int? MaxPlayers { get; set; }
 
+    // Rich text (HTML from the drill editor) is the source of truth. The arrays
+    // are kept flattened from it so clients that predate the editor keep working;
+    // they are derived, never written directly. See DrillRichText.
+    public string? InstructionsHtml { get; set; }
+    public string? CoachingPointsHtml { get; set; }
+
     // Instruction data stored as PostgreSQL arrays
     public string[] Instructions { get; set; } = [];
     public string[] CoachingPoints { get; set; } = [];
