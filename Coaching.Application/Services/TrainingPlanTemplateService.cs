@@ -294,6 +294,11 @@ public class TrainingPlanService : ITrainingPlanService
                 SectionCount = 0,
                 DrillCount = 0
             });
+
+            // The bus outbox only ships what a SaveChanges commits, so this publish needs its
+            // own flush. Without it the message is written and never sent, the event keeps its
+            // TrainingPlanId and summary, and the plan's header outlives the plan itself.
+            await _planRepository.SaveChangesAsync();
         }
     }
 
