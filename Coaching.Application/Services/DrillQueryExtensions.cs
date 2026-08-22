@@ -18,6 +18,7 @@ public static class DrillQueryExtensions
     /// <item><see cref="DrillScope.Club"/>: drills of the contextual club (none when no club supplied).</item>
     /// <item><see cref="DrillScope.Saved"/>: drills the user bookmarked.</item>
     /// <item><see cref="DrillScope.Liked"/>: drills the user liked.</item>
+    /// <item><see cref="DrillScope.Public"/>: the shared library only, excluding the user's own private drills.</item>
     /// </list>
     /// </summary>
     public static IQueryable<Drill> ApplyScope(this IQueryable<Drill> query, DrillScope scope, Guid userId, Guid? clubId)
@@ -30,6 +31,7 @@ public static class DrillQueryExtensions
                 : query.Where(d => false),
             DrillScope.Saved => query.Where(d => d.Bookmarks.Any(b => b.UserId == userId)),
             DrillScope.Liked => query.Where(d => d.Likes.Any(l => l.UserId == userId)),
+            DrillScope.Public => query.Where(d => d.Visibility == DrillVisibility.Public),
             _ => query.Where(d =>
                 d.Visibility == DrillVisibility.Public
                 || d.CreatedByUserId == userId

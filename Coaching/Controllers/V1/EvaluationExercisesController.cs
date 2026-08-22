@@ -25,6 +25,14 @@ public class EvaluationExercisesController : Shared.Microservices.Controllers.Ba
         return Ok(result);
     }
 
+    [HttpGet("me/evaluation-exercises")]
+    public async Task<IActionResult> GetMine([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+    {
+        CheckIsUserLoggedIn();
+        var result = await _exerciseService.GetUserExercisesAsync(JwtPayload.UserId, page, pageSize);
+        return Ok(result);
+    }
+
     [HttpGet("evaluation-exercises/{id:guid}")]
     public async Task<IActionResult> GetById(Guid id)
     {

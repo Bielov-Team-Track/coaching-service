@@ -41,4 +41,15 @@ public class EvaluationExerciseRepository : BaseRepository<EvaluationExercise>, 
             .Take(pageSize)
             .ToListAsync();
     }
+
+    public async Task<IEnumerable<EvaluationExercise>> GetUserExercisesAsync(Guid userId, int page = 1, int pageSize = 20)
+    {
+        return await _dbSet
+            .Include(e => e.Metrics.Where(m => !m.IsDeleted).OrderBy(m => m.Order))
+            .Where(e => e.CreatedByUserId == userId && !e.IsDeleted)
+            .OrderByDescending(e => e.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+    }
 }

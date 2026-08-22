@@ -8,6 +8,7 @@ public interface IEvaluationExerciseService
     Task<EvaluationExerciseDto?> GetByIdAsync(Guid id);
     Task<IEnumerable<EvaluationExerciseDto>> GetByClubIdAsync(Guid clubId);
     Task<ExerciseListResponseDto> GetPublicExercisesAsync(int page = 1, int pageSize = 20);
+    Task<ExerciseListResponseDto> GetUserExercisesAsync(Guid userId, int page = 1, int pageSize = 20);
     Task<EvaluationExerciseDto> UpdateAsync(Guid id, UpdateEvaluationExerciseDto request, Guid userId);
     Task DeleteAsync(Guid id, Guid userId);
 
