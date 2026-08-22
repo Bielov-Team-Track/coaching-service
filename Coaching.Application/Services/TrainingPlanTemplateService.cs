@@ -1276,19 +1276,32 @@ public class TrainingPlanService : ITrainingPlanService
         if (filter.Level.HasValue)
             query = query.Where(t => t.Level == filter.Level.Value);
 
-        // TODO: Skills filter would require joining with Items and Drills
-        // Skipping for now as it's more complex
+        if (filter.Skills is { Count: > 0 })
+        {
+            var skills = filter.Skills
+                .Select(s => Enum.TryParse<DrillSkill>(s, ignoreCase: true, out var parsed) ? parsed : (DrillSkill?)null)
+                .Where(s => s.HasValue)
+                .Select(s => s!.Value)
+                .ToArray();
+
+            if (skills.Length > 0)
+                query = query.Where(t => t.Items.Any(i => i.Drill != null && i.Drill.Skills.Any(sk => skills.Contains(sk))));
+        }
 
         // Get total count before pagination
         var totalCount = await query.CountAsync();
 
         // Apply sorting
+        // The clients send "shortest"/"mostLiked"-style names; the older "duration"/"likes" ones
+        // are kept so an out-of-date caller keeps the sort it asked for rather than silently
+        // falling through to newest.
         query = filter.SortBy?.ToLower() switch
         {
             "name" => query.OrderBy(t => t.Name),
-            "duration" => query.OrderBy(t => t.TotalDuration),
-            "likes" => query.OrderByDescending(t => t.LikeCount),
-            "usage" => query.OrderByDescending(t => t.UsageCount),
+            "shortest" or "duration" => query.OrderBy(t => t.TotalDuration),
+            "longest" => query.OrderByDescending(t => t.TotalDuration),
+            "mostliked" or "likes" => query.OrderByDescending(t => t.LikeCount),
+            "mostused" or "usage" => query.OrderByDescending(t => t.UsageCount),
             "oldest" => query.OrderBy(t => t.CreatedAt),
             _ => query.OrderByDescending(t => t.CreatedAt) // newest by default
         };
