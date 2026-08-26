@@ -117,6 +117,20 @@ public class DrillQueryFilterTests
     }
 
     [Test]
+    public void Scope_Public_excludes_the_users_own_private_drills()
+    {
+        var publicDrill = Drill(createdBy: Other, visibility: DrillVisibility.Public);
+        var myPublic = Drill(createdBy: Me, visibility: DrillVisibility.Public);
+        var myPrivate = Drill(createdBy: Me, visibility: DrillVisibility.Private);
+        var clubPrivate = Drill(createdBy: Other, clubId: ClubA, visibility: DrillVisibility.Private);
+
+        var result = Run([publicDrill, myPublic, myPrivate, clubPrivate],
+            q => q.ApplyScope(DrillScope.Public, Me, ClubA));
+
+        result.Should().BeEquivalentTo([publicDrill, myPublic]);
+    }
+
+    [Test]
     public void Categories_filter_is_OR_within_dimension()
     {
         var warmup = Drill(category: DrillCategory.Warmup);

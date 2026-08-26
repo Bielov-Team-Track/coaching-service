@@ -67,6 +67,21 @@ public class EvaluationExerciseService(
         };
     }
 
+    public async Task<ExerciseListResponseDto> GetUserExercisesAsync(Guid userId, int page = 1, int pageSize = 20)
+    {
+        var exercises = await exerciseRepository.GetUserExercisesAsync(userId, page, pageSize);
+        var total = await exerciseRepository.Query()
+            .CountAsync(e => e.CreatedByUserId == userId && !e.IsDeleted);
+
+        return new ExerciseListResponseDto
+        {
+            Items = mapper.Map<IEnumerable<EvaluationExerciseDto>>(exercises),
+            TotalCount = total,
+            Page = page,
+            PageSize = pageSize
+        };
+    }
+
     public async Task<EvaluationExerciseDto> UpdateAsync(Guid id, UpdateEvaluationExerciseDto request, Guid userId)
     {
         var exercise = await exerciseRepository.GetByIdAsync(id);

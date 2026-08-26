@@ -120,6 +120,14 @@ namespace Coaching
             });
             services.AddScoped<IEventsGrpcClient, EventsGrpcClient>();
 
+            var profilesGrpcAddress = Configuration["GrpcClients:ProfilesService"] ?? "http://profiles-service:5171";
+            services.AddGrpcClient<UserProfileService.UserProfileServiceClient>(o =>
+            {
+                o.Address = new Uri(profilesGrpcAddress);
+            });
+            services.AddScoped<IProfilesGuardianGrpcClient, ProfilesGuardianGrpcClient>();
+            services.AddScoped<Shared.Services.IGuardianAccessSource, ProfilesGuardianAccessSource>();
+
             // AutoMapper & Application services
             services.AddApplicationMappings();
             services.AddApplicationServices();
@@ -264,10 +272,11 @@ namespace Coaching
 
             app.UseAuthentication();
             app.UseMiddleware<JwtBlacklistMiddleware>();
-            app.UseMiddleware<GuardianContextMiddleware>();
             app.UseAuthorization();
 
             app.UseMiddleware<ErrorHandlerMiddleware>();
+            // After the error handler: the refusal it throws must be shaped into a 400, not escape as a 500.
+            app.UseMiddleware<GuardianContextMiddleware>();
 
             app.UseEndpoints(endpoints =>
             {

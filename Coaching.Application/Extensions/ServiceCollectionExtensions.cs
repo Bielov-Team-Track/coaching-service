@@ -19,7 +19,8 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddApplicationServices(this IServiceCollection services)
     {
         services.AddScoped<Shared.Services.IActionRiskClassifier, DefaultActionRiskClassifier>();
-        services.AddScoped<Shared.Services.IGuardianCacheService, CacheOnlyGuardianCacheService>();
+        services.AddScoped<Shared.Services.IGuardianCacheService, ProfilesGuardianCacheService>();
+        services.AddScoped<Shared.Services.IGuardianAuthorizer, Shared.Services.GuardianAuthorizer>();
         services.AddScoped<IDrillService, DrillService>();
         services.AddScoped<ITrainingPlanService, TrainingPlanService>();
         services.AddScoped<IRunService, RunService>();
