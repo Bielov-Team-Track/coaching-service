@@ -64,17 +64,18 @@ public class FeedbackSeenStatusTests : UnitTestBase
 
         // Assert
         feedback.SeenAt.Should().Be(Now);
+        feedback.LastSeenAt.Should().Be(Now);
         _feedbackRepository.Received(1).Update(feedback);
         await _feedbackRepository.Received(1).SaveChangesAsync();
     }
 
     [Test]
-    public async Task MarkSeenAsync_WhenAlreadySeen_DoesNotOverwriteOrSave()
+    public async Task MarkSeenAsync_WhenAlreadySeen_KeepsTheReceiptAndMovesLastSeen()
     {
         // Arrange
         var recipientId = Guid.NewGuid();
         var firstSeen = PastDate(2);
-        var feedback = new Feedback { Id = Guid.NewGuid(), RecipientUserId = recipientId, SharedWithPlayer = true, SeenAt = firstSeen };
+        var feedback = new Feedback { Id = Guid.NewGuid(), RecipientUserId = recipientId, SharedWithPlayer = true, SeenAt = firstSeen, LastSeenAt = firstSeen };
         _feedbackRepository.GetByIdAsync(feedback.Id).Returns(feedback);
 
         // Act
@@ -82,7 +83,8 @@ public class FeedbackSeenStatusTests : UnitTestBase
 
         // Assert
         feedback.SeenAt.Should().Be(firstSeen);
-        await _feedbackRepository.DidNotReceive().SaveChangesAsync();
+        feedback.LastSeenAt.Should().Be(Now);
+        await _feedbackRepository.Received(1).SaveChangesAsync();
     }
 
     [Test]
