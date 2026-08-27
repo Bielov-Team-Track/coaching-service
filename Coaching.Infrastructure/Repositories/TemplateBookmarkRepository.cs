@@ -33,4 +33,13 @@ public class PlanBookmarkRepository : BaseRepository<PlanBookmark>, IPlanBookmar
     {
         return await _dbSet.CountAsync(b => b.UserId == userId && !b.IsDeleted);
     }
+
+    public async Task<IEnumerable<Guid>> GetUserBookmarkedPlanIdsAsync(Guid userId, IEnumerable<Guid> planIds)
+    {
+        var ids = planIds.ToList();
+        return await _dbSet
+            .Where(b => b.UserId == userId && !b.IsDeleted && ids.Contains(b.TemplateId))
+            .Select(b => b.TemplateId)
+            .ToListAsync();
+    }
 }

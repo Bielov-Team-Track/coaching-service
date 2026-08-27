@@ -30,6 +30,10 @@ public class TrainingPlanDto
     public int TotalDuration { get; set; }
     public int LikeCount { get; set; }
     public int UsageCount { get; set; }
+
+    /// <summary>Null for an anonymous read; the viewer's own state otherwise.</summary>
+    public bool? IsLiked { get; set; }
+    public bool? IsBookmarked { get; set; }
     public int CommentCount { get; set; }
     public List<string> Skills { get; set; } = new();
     public int DrillCount { get; set; }

@@ -18,8 +18,9 @@ public interface ITrainingPlanService
     // List/Browse
     Task<PlanListResponseDto> GetMyPlansAsync(Guid userId, PlanFilterRequest filter);
     Task<PlanListResponseDto> GetClubPlansAsync(Guid clubId, Guid userId, PlanFilterRequest filter);
-    Task<PlanListResponseDto> GetPublicPlansAsync(PlanFilterRequest filter);
+    Task<PlanListResponseDto> GetPublicPlansAsync(PlanFilterRequest filter, Guid? userId = null);
     Task<PlanListResponseDto> GetBookmarkedPlansAsync(Guid userId, PlanFilterRequest filter);
+    Task<PlanListResponseDto> GetLikedPlansAsync(Guid userId, PlanFilterRequest filter);
 
     // Sections
     Task<PlanSectionDto> AddSectionAsync(Guid planId, CreatePlanSectionDto request, Guid userId);

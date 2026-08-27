@@ -107,7 +107,8 @@ public class PlansController : Shared.Microservices.Controllers.BaseApiControlle
     [HttpGet("plans")]
     public async Task<IActionResult> GetPublicPlans([FromQuery] PlanFilterRequest filter)
     {
-        var result = await _planService.GetPublicPlansAsync(filter);
+        var userId = JwtPayload?.UserId is { } id && id != Guid.Empty ? id : (Guid?)null;
+        var result = await _planService.GetPublicPlansAsync(filter, userId);
         return Ok(result);
     }
 
@@ -116,6 +117,14 @@ public class PlansController : Shared.Microservices.Controllers.BaseApiControlle
     {
         CheckIsUserLoggedIn();
         var result = await _planService.GetBookmarkedPlansAsync(JwtPayload.UserId, filter);
+        return Ok(result);
+    }
+
+    [HttpGet("me/plans/likes")]
+    public async Task<IActionResult> GetLikedPlans([FromQuery] PlanFilterRequest filter)
+    {
+        CheckIsUserLoggedIn();
+        var result = await _planService.GetLikedPlansAsync(JwtPayload.UserId, filter);
         return Ok(result);
     }
 
