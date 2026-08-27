@@ -17,7 +17,13 @@ public class FeedbackMappingProfile : Profile
             .ForMember(d => d.Attachments, opt => opt.MapFrom(s => s.Media));
         CreateMap<ImprovementPoint, ImprovementPointDto>()
             .ForMember(d => d.AttachedDrills, opt => opt.MapFrom(s =>
-                s.AttachedDrills.Select(ad => new AttachedDrillReferenceDto { DrillId = ad.DrillId })));
+                s.AttachedDrills.Select(ad => new AttachedDrillReferenceDto
+                {
+                    DrillId = ad.DrillId,
+                    Name = ad.Drill != null ? ad.Drill.Name : null,
+                    Category = ad.Drill != null ? ad.Drill.Category : null,
+                    Intensity = ad.Drill != null ? ad.Drill.Intensity : null,
+                })));
         CreateMap<ImprovementPointMedia, ImprovementPointMediaDto>()
             .ForMember(d => d.Url, opt => opt.MapFrom<SignedImprovementPointMediaUrlResolver>());
         CreateMap<FeedbackMedia, FeedbackMediaDto>()

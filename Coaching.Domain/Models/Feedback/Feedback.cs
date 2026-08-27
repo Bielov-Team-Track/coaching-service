@@ -15,7 +15,11 @@ public class Feedback : BaseEntity
     public bool SharedWithPlayer { get; set; }
 
     // Set once when the recipient first opens shared feedback (read receipt). Null = unseen.
+    /// <summary>First time the recipient opened it — the read receipt, never overwritten.</summary>
     public DateTime? SeenAt { get; set; }
+
+    /// <summary>Most recent time the recipient opened it.</summary>
+    public DateTime? LastSeenAt { get; set; }
 
     // Phase A backward compat: Comment column kept in DB, mapped by EF.
     // Code writes to both Content and Comment to keep them in sync.

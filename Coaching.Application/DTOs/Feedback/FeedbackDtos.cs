@@ -15,6 +15,7 @@ public class FeedbackDto
     public string? Comment { get; set; }
     public bool SharedWithPlayer { get; set; }
     public DateTime? SeenAt { get; set; }
+    public DateTime? LastSeenAt { get; set; }
     public List<ImprovementPointDto> ImprovementPoints { get; set; } = new();
     public List<FeedbackMediaDto> Attachments { get; set; } = new();
     public PraiseDto? Praise { get; set; }
@@ -34,6 +35,9 @@ public class ImprovementPointDto
 public class AttachedDrillReferenceDto
 {
     public Guid DrillId { get; set; }
+    public string? Name { get; set; }
+    public DrillCategory? Category { get; set; }
+    public DrillIntensity? Intensity { get; set; }
 }
 
 public class ImprovementPointMediaDto
@@ -42,6 +46,7 @@ public class ImprovementPointMediaDto
     public required string Url { get; set; }
     public FeedbackMediaType Type { get; set; }
     public string? Title { get; set; }
+    public FeedbackMediaSource Source { get; set; }
 }
 
 public class FeedbackMediaDto
@@ -92,6 +97,7 @@ public record CreateImprovementPointMediaDto
     public required string Url { get; set; }
     public FeedbackMediaType Type { get; set; }
     public string? Title { get; set; }
+    public FeedbackMediaSource Source { get; set; }
 }
 
 public record CreatePraiseDto
