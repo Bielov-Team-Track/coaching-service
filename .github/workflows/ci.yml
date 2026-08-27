@@ -14,7 +14,7 @@ permissions: {}
 
 jobs:
   build-and-test:
-    uses: Bielov-Team-Track/devops/.github/workflows/build-dotnet-service.yml@main
+    uses: Spike-Volleyball/devops/.github/workflows/build-dotnet-service.yml@main
     permissions:
       contents: read
     with:
@@ -32,7 +32,7 @@ jobs:
   build-push:
     needs: build-and-test
     if: github.event_name == 'push'
-    uses: Bielov-Team-Track/devops/.github/workflows/build-dotnet-service.yml@main
+    uses: Spike-Volleyball/devops/.github/workflows/build-dotnet-service.yml@main
     permissions:
       contents: read
       packages: write
@@ -51,7 +51,7 @@ jobs:
   integration-tests:
     needs: build-push
     if: github.event_name == 'push'
-    uses: Bielov-Team-Track/devops/.github/workflows/integration-tests.yml@main
+    uses: Spike-Volleyball/devops/.github/workflows/integration-tests.yml@main
     permissions:
       contents: read
     with:
@@ -64,7 +64,7 @@ jobs:
   deploy-staging:
     needs: [build-push, integration-tests]
     if: always() && github.ref == 'refs/heads/development' && github.event_name == 'push' && needs.build-push.result == 'success' && (needs.integration-tests.result == 'success' || needs.integration-tests.result == 'skipped')
-    uses: Bielov-Team-Track/devops/.github/workflows/deploy-service.yml@main
+    uses: Spike-Volleyball/devops/.github/workflows/deploy-service.yml@main
     permissions:
       contents: read
     with:
@@ -76,7 +76,7 @@ jobs:
   deploy-production:
     needs: [build-push, integration-tests]
     if: always() && github.ref == 'refs/heads/main' && github.event_name == 'push' && needs.build-push.result == 'success' && (needs.integration-tests.result == 'success' || needs.integration-tests.result == 'skipped')
-    uses: Bielov-Team-Track/devops/.github/workflows/deploy-service.yml@main
+    uses: Spike-Volleyball/devops/.github/workflows/deploy-service.yml@main
     permissions:
       contents: read
     with:

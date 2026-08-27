@@ -18,6 +18,7 @@ public class FeedbackRepository : BaseRepository<Feedback>, IFeedbackRepository
             .AsSplitQuery()
             .Include(f => f.ImprovementPoints.Where(ip => !ip.IsDeleted).OrderBy(ip => ip.Order))
                 .ThenInclude(ip => ip.AttachedDrills.Where(d => !d.IsDeleted))
+                    .ThenInclude(ad => ad.Drill)
             .Include(f => f.ImprovementPoints)
                 .ThenInclude(ip => ip.MediaLinks.Where(m => !m.IsDeleted))
             .Include(f => f.Media.Where(m => !m.IsDeleted).OrderBy(m => m.Order))

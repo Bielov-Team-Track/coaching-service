@@ -9,6 +9,7 @@ public class ImprovementPointMedia : BaseEntity
     public required string Url { get; set; }
     public FeedbackMediaType Type { get; set; }
     public string? Title { get; set; }
+    public FeedbackMediaSource Source { get; set; }
 
     public virtual ImprovementPoint ImprovementPoint { get; set; } = null!;
 }

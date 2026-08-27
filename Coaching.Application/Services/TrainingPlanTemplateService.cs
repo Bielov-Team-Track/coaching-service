@@ -151,6 +151,7 @@ public class TrainingPlanService : ITrainingPlanService
 
         var dto = _mapper.Map<TrainingPlanDetailDto>(plan);
         await EnrichWithClubInfoAsync([dto]);
+        await EnrichWithUserInteractionsAsync([dto], userId);
         return dto;
     }
 
@@ -509,6 +510,7 @@ public class TrainingPlanService : ITrainingPlanService
 
         var dtos = _mapper.Map<List<TrainingPlanDto>>(items);
         await EnrichWithClubInfoAsync(dtos);
+        await EnrichWithUserInteractionsAsync(dtos, userId);
 
         return new PlanListResponseDto
         {
@@ -544,6 +546,7 @@ public class TrainingPlanService : ITrainingPlanService
 
         var dtos = _mapper.Map<List<TrainingPlanDto>>(items);
         await EnrichWithClubInfoAsync(dtos);
+        await EnrichWithUserInteractionsAsync(dtos, userId);
 
         return new PlanListResponseDto
         {
@@ -555,7 +558,7 @@ public class TrainingPlanService : ITrainingPlanService
         };
     }
 
-    public async Task<PlanListResponseDto> GetPublicPlansAsync(PlanFilterRequest filter)
+    public async Task<PlanListResponseDto> GetPublicPlansAsync(PlanFilterRequest filter, Guid? userId = null)
     {
         var query = _planRepository.Query()
             .Where(t => t.PlanType == PlanType.Template && t.Visibility == TemplateVisibility.Public);
@@ -564,6 +567,7 @@ public class TrainingPlanService : ITrainingPlanService
 
         var dtos = _mapper.Map<List<TrainingPlanDto>>(items);
         await EnrichWithClubInfoAsync(dtos);
+        await EnrichWithUserInteractionsAsync(dtos, userId);
 
         return new PlanListResponseDto
         {
@@ -585,6 +589,29 @@ public class TrainingPlanService : ITrainingPlanService
 
         var dtos = _mapper.Map<List<TrainingPlanDto>>(plans);
         await EnrichWithClubInfoAsync(dtos);
+        await EnrichWithUserInteractionsAsync(dtos, userId);
+
+        return new PlanListResponseDto
+        {
+            Items = dtos,
+            TotalCount = totalCount,
+            Page = filter.Page,
+            PageSize = filter.PageSize,
+            TotalPages = (int)Math.Ceiling(totalCount / (double)filter.PageSize)
+        };
+    }
+
+    public async Task<PlanListResponseDto> GetLikedPlansAsync(Guid userId, PlanFilterRequest filter)
+    {
+        var skip = (filter.Page - 1) * filter.PageSize;
+        var likes = await _likeRepository.GetByUserAsync(userId, skip, filter.PageSize);
+        var totalCount = await _likeRepository.GetCountByUserAsync(userId);
+
+        var plans = likes.Select(l => l.Plan).ToList();
+
+        var dtos = _mapper.Map<List<TrainingPlanDto>>(plans);
+        await EnrichWithClubInfoAsync(dtos);
+        await EnrichWithUserInteractionsAsync(dtos, userId);
 
         return new PlanListResponseDto
         {
@@ -1323,6 +1350,33 @@ public class TrainingPlanService : ITrainingPlanService
     /// <summary>
     /// Enriches plan DTOs with club info from clubs-service (batch operation for performance)
     /// </summary>
+    /// <summary>
+    /// Stamps each plan with the viewer's own like/bookmark state. Mirrors the drill
+    /// list: two batched lookups, and every field left null for an anonymous read so a
+    /// client can tell "not liked" apart from "nobody asked".
+    /// </summary>
+    private async Task EnrichWithUserInteractionsAsync(IEnumerable<TrainingPlanDto> plans, Guid? userId)
+    {
+        if (!userId.HasValue) return;
+
+        var planList = plans.ToList();
+        if (planList.Count == 0) return;
+
+        var planIds = planList.Select(p => p.Id).ToList();
+
+        // Sequential on purpose: both repositories resolve the same scoped DbContext, and
+        // EF throws "A second operation was started on this context instance" the moment
+        // the two queries overlap.
+        var likedSet = (await _likeRepository.GetUserLikedPlanIdsAsync(userId.Value, planIds)).ToHashSet();
+        var bookmarkedSet = (await _bookmarkRepository.GetUserBookmarkedPlanIdsAsync(userId.Value, planIds)).ToHashSet();
+
+        foreach (var plan in planList)
+        {
+            plan.IsLiked = likedSet.Contains(plan.Id);
+            plan.IsBookmarked = bookmarkedSet.Contains(plan.Id);
+        }
+    }
+
     private async Task EnrichWithClubInfoAsync(IEnumerable<TrainingPlanDto> plans)
     {
         var planList = plans.ToList();

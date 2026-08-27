@@ -8,4 +8,5 @@ public interface IPlanBookmarkRepository : IRepository<PlanBookmark>
     Task<PlanBookmark?> GetByTemplateAndUserAsync(Guid templateId, Guid userId);
     Task<IEnumerable<PlanBookmark>> GetByUserAsync(Guid userId, int skip, int take);
     Task<int> GetCountByUserAsync(Guid userId);
+    Task<IEnumerable<Guid>> GetUserBookmarkedPlanIdsAsync(Guid userId, IEnumerable<Guid> planIds);
 }

@@ -223,9 +223,22 @@ public class FeedbackService(
             feedback.Comment = feedback.ContentPlainText;
         }
 
+        var wasShared = feedback.SharedWithPlayer;
         if (request.SharedWithPlayer.HasValue) feedback.SharedWithPlayer = request.SharedWithPlayer.Value;
 
         feedbackRepository.Update(feedback);
+
+        // Publishing before the save is what puts the message in the transactional outbox;
+        // a Publish after the last SaveChangesAsync is silently dropped.
+        if (feedback.SharedWithPlayer)
+        {
+            var preview = BuildPreview(feedback.ContentPlainText, feedback.Praise?.Message, feedback.ImprovementPoints?.Count ?? 0);
+            if (wasShared)
+                await PublishFeedbackUpdatedAsync(feedback, preview);
+            else
+                await PublishFeedbackSharedAsync(feedback, preview);
+        }
+
         await feedbackRepository.SaveChangesAsync();
 
         return await GetByIdAsync(id, userId) ?? throw new Exception("Failed to retrieve feedback");
@@ -329,10 +342,10 @@ public class FeedbackService(
         if (feedback.RecipientUserId != userId || !feedback.SharedWithPlayer)
             throw new ForbiddenException("Only the recipient can mark shared feedback as seen");
 
-        // First-seen wins: preserve the original read-receipt timestamp.
-        if (feedback.SeenAt != null) return;
-
-        feedback.SeenAt = timeProvider.GetUtcNow().UtcDateTime;
+        // First-seen wins for the receipt; LastSeenAt moves with every open.
+        var now = timeProvider.GetUtcNow().UtcDateTime;
+        feedback.SeenAt ??= now;
+        feedback.LastSeenAt = now;
         feedbackRepository.Update(feedback);
         await feedbackRepository.SaveChangesAsync();
     }
@@ -417,14 +430,27 @@ public class FeedbackService(
         if (drill == null)
             throw new EntityNotFoundException("Drill not found");
 
-        var link = new ImprovementPointDrill
-        {
-            ImprovementPointId = pointId,
-            DrillId = drillId
-        };
+        // (ImprovementPointId, DrillId) is uniquely indexed and removal only soft-deletes, so the
+        // slot survives a detach — inserting a second row throws 23505. Revive the existing link
+        // instead, which also makes re-attaching an already-linked drill a no-op rather than a 500.
+        var link = await drillLinkRepository.Query()
+            .FirstOrDefaultAsync(l => l.ImprovementPointId == pointId && l.DrillId == drillId);
 
-        drillLinkRepository.Add(link);
-        await drillLinkRepository.SaveChangesAsync();
+        if (link == null)
+        {
+            drillLinkRepository.Add(new ImprovementPointDrill
+            {
+                ImprovementPointId = pointId,
+                DrillId = drillId
+            });
+            await drillLinkRepository.SaveChangesAsync();
+        }
+        else if (link.IsDeleted)
+        {
+            link.IsDeleted = false;
+            drillLinkRepository.Update(link);
+            await drillLinkRepository.SaveChangesAsync();
+        }
 
         return await GetByIdAsync(feedbackId, userId) ?? throw new Exception("Failed to retrieve feedback");
     }
@@ -623,6 +649,18 @@ public class FeedbackService(
     private async Task PublishFeedbackSharedAsync(Feedback feedback, string? preview)
     {
         await publishEndpoint.Publish(new FeedbackSharedEvent
+        {
+            UserId = feedback.RecipientUserId,
+            FeedbackId = feedback.Id,
+            CoachUserId = feedback.CoachUserId,
+            CoachName = await ResolveCoachNameAsync(feedback.CoachUserId),
+            Preview = preview,
+        });
+    }
+
+    private async Task PublishFeedbackUpdatedAsync(Feedback feedback, string? preview)
+    {
+        await publishEndpoint.Publish(new FeedbackUpdatedEvent
         {
             UserId = feedback.RecipientUserId,
             FeedbackId = feedback.Id,
