@@ -30,6 +30,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<ProjectReference Include="..\Coaching\Coaching.csproj" />
 		<ProjectReference Include="..\Coaching.Application\Coaching.Application.csproj" />
 		<ProjectReference Include="..\Coaching.Domain\Coaching.Domain.csproj" />
 		<ProjectReference Include="..\shared\Shared.Testing\Shared.Testing.csproj" />

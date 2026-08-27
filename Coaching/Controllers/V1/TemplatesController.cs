@@ -3,6 +3,7 @@ using Coaching.Application.DTOs.Templates;
 using Coaching.Application.Interfaces.Services;
 using Microsoft.AspNetCore.Mvc;
 using Shared.DataAccess.Providers.Interfaces;
+using Shared.Microservices.Guardian;
 
 namespace Coaching.Controllers.V1;
 
@@ -68,10 +69,12 @@ public class PlansController : Shared.Microservices.Controllers.BaseApiControlle
     }
 
     [HttpGet("events/{eventId:guid}/plans")]
-    public async Task<IActionResult> GetEventPlan([FromRoute] Guid eventId)
+    [AcceptsSubject]
+    public async Task<IActionResult> GetEventPlan([FromRoute] Guid eventId, [FromSubject] Guid subjectUserId)
     {
         CheckIsUserLoggedIn();
-        var result = await _planService.GetByEventIdAsync(eventId, JwtPayload.UserId);
+        // A guardian opening their child's event is authorized against the child's participation.
+        var result = await _planService.GetByEventIdAsync(eventId, subjectUserId);
         if (result == null) return NotFound();
         return Ok(result);
     }
