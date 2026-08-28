@@ -21,6 +21,12 @@ public class TrainingPlan : BaseEntity
 
     // Denormalized aggregates
     public int TotalDuration { get; set; }
+
+    /// <summary>
+    /// Total minus breaks and meetings. Kept beside TotalDuration because a coach budgets
+    /// against both: the slot the gym is booked for, and the time actually spent coaching.
+    /// </summary>
+    public int CoachedDuration { get; set; }
     public int LikeCount { get; set; }
     public int UsageCount { get; set; }
 

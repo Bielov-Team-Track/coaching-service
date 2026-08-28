@@ -1,3 +1,4 @@
+using Coaching.Domain.Enums;
 using AutoMapper;
 using Coaching.Application.DTOs.Drills;
 using Coaching.Application.DTOs.Templates;
@@ -77,9 +78,11 @@ public class PlanMappingProfile : Profile
             .ForMember(d => d.Plan, opt => opt.Ignore())
             .ForMember(d => d.Items, opt => opt.Ignore());
 
-        // Item mappings - Drill is local, map it directly
+        // Item mappings - Drill is local, map it directly. IsCoached is resolved here so no
+        // client has to re-derive it and get a different answer.
         CreateMap<PlanItem, PlanItemDto>()
-            .ForMember(d => d.Drill, opt => opt.MapFrom(s => s.Drill));
+            .ForMember(d => d.Drill, opt => opt.MapFrom(s => s.Drill))
+            .ForMember(d => d.IsCoached, opt => opt.MapFrom(s => s.Kind.IsCoached()));
 
         CreateMap<CreatePlanItemDto, PlanItem>()
             .ForMember(d => d.Id, opt => opt.Ignore())

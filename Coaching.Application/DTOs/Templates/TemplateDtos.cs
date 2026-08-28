@@ -28,6 +28,10 @@ public class TrainingPlanDto
     public TemplateVisibility Visibility { get; set; }
     public DifficultyLevel Level { get; set; }
     public int TotalDuration { get; set; }
+
+    /// <summary>Total minus breaks and meetings — the time actually spent coaching.</summary>
+    public int CoachedDuration { get; set; }
+
     public int LikeCount { get; set; }
     public int UsageCount { get; set; }
 
@@ -60,12 +64,18 @@ public class PlanSectionDto
 public class PlanItemDto
 {
     public Guid Id { get; set; }
-    public Guid DrillId { get; set; }
+    public ItemKind Kind { get; set; }
+    public Guid? DrillId { get; set; }
+    public string? Title { get; set; }
+
     public Guid? SectionId { get; set; }
     public int Order { get; set; }
     public int Duration { get; set; }
     public string? Notes { get; set; }
     public DrillDto? Drill { get; set; }
+
+    /// <summary>Whether this row is coaching time. Breaks and meetings are not.</summary>
+    public bool IsCoached { get; set; }
 }
 
 // Request DTOs
@@ -101,17 +111,21 @@ public record UpdatePlanSectionDto(
 );
 
 public record CreatePlanItemDto(
-    Guid DrillId,
+    Guid? DrillId,
     Guid? SectionId,
     int Duration,
     string? Notes,
-    int? Order = null
+    int? Order = null,
+    ItemKind Kind = ItemKind.Drill,
+    string? Title = null
 );
 
 public record UpdatePlanItemDto(
     Guid? SectionId,
     int? Duration,
-    string? Notes
+    string? Notes,
+    ItemKind? Kind = null,
+    string? Title = null
 );
 
 public record ReorderPlanItemsDto(

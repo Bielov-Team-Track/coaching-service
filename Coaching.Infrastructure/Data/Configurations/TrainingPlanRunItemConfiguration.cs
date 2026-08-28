@@ -13,7 +13,6 @@ public class TrainingPlanRunItemConfiguration : IEntityTypeConfiguration<Trainin
 
         builder.Property(i => i.RunId).IsRequired();
         builder.Property(i => i.PlanItemId).IsRequired();
-        builder.Property(i => i.DrillId).IsRequired();
 
         builder.HasIndex(i => new { i.RunId, i.Order });
     }

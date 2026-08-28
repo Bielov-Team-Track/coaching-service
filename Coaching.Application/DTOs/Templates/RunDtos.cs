@@ -32,7 +32,7 @@ public class RunItemDto
 {
     public Guid Id { get; set; }
     public Guid PlanItemId { get; set; }
-    public Guid DrillId { get; set; }
+    public Guid? DrillId { get; set; }
     public int Order { get; set; }
     public int PlannedDurationSeconds { get; set; }
     public int ActualElapsedSeconds { get; set; }

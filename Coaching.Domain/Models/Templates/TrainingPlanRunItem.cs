@@ -7,8 +7,9 @@ public class TrainingPlanRunItem : BaseEntity
     public Guid RunId { get; set; }
     public Guid PlanItemId { get; set; }
 
-    // Snapshot so a deleted plan item still resolves a drill id.
-    public Guid DrillId { get; set; }
+    // Snapshot so a deleted plan item still resolves a drill id. Null for the kinds
+    // that never had one — a break is not a drill.
+    public Guid? DrillId { get; set; }
 
     // Snapshot of item order at run start.
     public int Order { get; set; }

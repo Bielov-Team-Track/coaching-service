@@ -67,6 +67,9 @@ public class TrainingPlanService : ITrainingPlanService
             throw new BadRequestException("Plan name is required", ErrorCodeEnum.ValidationError);
 
         ValidatePlanFields(request.Name, request.Description, request.Sections, request.Items);
+        // Before anything is written: a plan that fails on its third item must not leave a
+        // half-built plan behind.
+        ValidateItemShapes(request.Items);
 
         var plan = new TrainingPlan
         {
@@ -77,6 +80,7 @@ public class TrainingPlanService : ITrainingPlanService
             Visibility = request.Visibility,
             Level = request.Level,
             TotalDuration = 0,
+            CoachedDuration = 0,
             LikeCount = 0,
             UsageCount = 0
         };
@@ -105,28 +109,12 @@ public class TrainingPlanService : ITrainingPlanService
         // Add items if provided
         if (request.Items != null && request.Items.Count > 0)
         {
-            // Validate all drills exist locally
-            var drillIds = request.Items.Select(i => i.DrillId).Distinct().ToList();
-            foreach (var drillId in drillIds)
-            {
-                var drill = await _drillRepository.GetByIdAsync(drillId);
-                if (drill == null)
-                    throw new BadRequestException($"Drill not found: {drillId}", ErrorCodeEnum.EntityNotFound);
-            }
+            await ValidateItemDrillsAsync(request.Items);
 
             int order = 1;
             foreach (var itemDto in request.Items)
             {
-                var item = new PlanItem
-                {
-                    TemplateId = plan.Id,
-                    DrillId = itemDto.DrillId,
-                    SectionId = itemDto.SectionId,
-                    Duration = itemDto.Duration,
-                    Notes = itemDto.Notes,
-                    Order = itemDto.Order ?? order++
-                };
-                _itemRepository.Add(item);
+                _itemRepository.Add(BuildItem(plan.Id, itemDto, order++));
             }
             await _itemRepository.SaveChangesAsync();
 
@@ -158,6 +146,7 @@ public class TrainingPlanService : ITrainingPlanService
     public async Task<TrainingPlanDetailDto> UpdateAsync(Guid id, UpdatePlanDto request, Guid userId)
     {
         ValidatePlanFields(request.Name, request.Description, request.Sections, request.Items);
+        ValidateItemShapes(request.Items);
 
         var plan = await _planRepository.GetByIdWithDetailsAsync(id);
         if (plan == null)
@@ -226,28 +215,12 @@ public class TrainingPlanService : ITrainingPlanService
             // Create new items
             if (request.Items != null && request.Items.Count > 0)
             {
-                // Validate all drills exist locally
-                var drillIds = request.Items.Select(i => i.DrillId).Distinct().ToList();
-                foreach (var drillId in drillIds)
-                {
-                    var drill = await _drillRepository.GetByIdAsync(drillId);
-                    if (drill == null)
-                        throw new BadRequestException($"Drill not found: {drillId}", ErrorCodeEnum.EntityNotFound);
-                }
+                await ValidateItemDrillsAsync(request.Items);
 
                 int order = 1;
                 foreach (var itemDto in request.Items)
                 {
-                    var item = new PlanItem
-                    {
-                        TemplateId = plan.Id,
-                        DrillId = itemDto.DrillId,
-                        SectionId = itemDto.SectionId,
-                        Duration = itemDto.Duration,
-                        Notes = itemDto.Notes,
-                        Order = itemDto.Order ?? order++
-                    };
-                    _itemRepository.Add(item);
+                    _itemRepository.Add(BuildItem(plan.Id, itemDto, order++));
                 }
                 await _itemRepository.SaveChangesAsync();
             }
@@ -310,6 +283,7 @@ public class TrainingPlanService : ITrainingPlanService
     public async Task<TrainingPlanDetailDto> CreateEventPlanAsync(Guid eventId, CreateEventPlanDto request, Guid userId)
     {
         ValidatePlanFields(request.Name, request.Description, request.Sections, request.Items);
+        ValidateItemShapes(request.Items);
 
         // Verify user is event admin (organizer/co-organizer)
         var isAdmin = await _eventsGrpcClient.IsEventAdminAsync(eventId, userId);
@@ -380,27 +354,12 @@ public class TrainingPlanService : ITrainingPlanService
 
             if (request.Items != null && request.Items.Count > 0)
             {
-                var drillIds = request.Items.Select(i => i.DrillId).Distinct().ToList();
-                foreach (var drillId in drillIds)
-                {
-                    var drill = await _drillRepository.GetByIdAsync(drillId);
-                    if (drill == null)
-                        throw new BadRequestException($"Drill not found: {drillId}", ErrorCodeEnum.EntityNotFound);
-                }
+                await ValidateItemDrillsAsync(request.Items);
 
                 int order = 1;
                 foreach (var itemDto in request.Items)
                 {
-                    var item = new PlanItem
-                    {
-                        TemplateId = plan.Id,
-                        DrillId = itemDto.DrillId,
-                        SectionId = itemDto.SectionId,
-                        Duration = itemDto.Duration,
-                        Notes = itemDto.Notes,
-                        Order = itemDto.Order ?? order++
-                    };
-                    _itemRepository.Add(item);
+                    _itemRepository.Add(BuildItem(plan.Id, itemDto, order++));
                 }
                 await _itemRepository.SaveChangesAsync();
             }
@@ -716,10 +675,12 @@ public class TrainingPlanService : ITrainingPlanService
 
         await ValidatePlanEditAsync(plan, userId);
 
-        // Validate drill exists locally
-        var drill = await _drillRepository.GetByIdAsync(request.DrillId);
-        if (drill == null)
-            throw new EntityNotFoundException("Drill not found");
+        if (request.Kind.HasDrill())
+        {
+            var drill = await _drillRepository.GetByIdAsync(request.DrillId!.Value);
+            if (drill == null)
+                throw new EntityNotFoundException("Drill not found");
+        }
 
         // Validate section if provided
         if (request.SectionId.HasValue)
@@ -731,15 +692,7 @@ public class TrainingPlanService : ITrainingPlanService
 
         var maxOrder = await _itemRepository.GetMaxOrderAsync(planId);
 
-        var item = new PlanItem
-        {
-            TemplateId = planId,
-            DrillId = request.DrillId,
-            SectionId = request.SectionId,
-            Duration = request.Duration,
-            Notes = request.Notes,
-            Order = request.Order ?? (maxOrder + 1)
-        };
+        var item = BuildItem(planId, request, maxOrder + 1);
 
         _itemRepository.Add(item);
         await _itemRepository.SaveChangesAsync();
@@ -1193,6 +1146,58 @@ public class TrainingPlanService : ITrainingPlanService
         }
     }
 
+    /// <summary>
+    /// Only the rows that point at a drill are checked; a break has none to check.
+    /// </summary>
+    private async Task ValidateItemDrillsAsync(IEnumerable<CreatePlanItemDto> items)
+    {
+        var drillIds = items
+            .Where(i => i.Kind.HasDrill() && i.DrillId.HasValue)
+            .Select(i => i.DrillId!.Value)
+            .Distinct();
+
+        foreach (var drillId in drillIds)
+        {
+            var drill = await _drillRepository.GetByIdAsync(drillId);
+            if (drill == null)
+                throw new BadRequestException($"Drill not found: {drillId}", ErrorCodeEnum.EntityNotFound);
+        }
+    }
+
+    /// <summary>
+    /// One place turns a request into a plan item, so the create, update and copy paths
+    /// cannot drift on what a kind is allowed to carry.
+    /// </summary>
+    private static void ValidateItemShapes(IEnumerable<CreatePlanItemDto>? items)
+    {
+        foreach (var dto in items ?? [])
+        {
+            if (dto.Kind.HasDrill() && !dto.DrillId.HasValue)
+                throw new BadRequestException("A drill item needs a drill", ErrorCodeEnum.ValidationError);
+
+            if (!dto.Kind.HasDrill() && string.IsNullOrWhiteSpace(dto.Title))
+                throw new BadRequestException($"A {dto.Kind} needs a title", ErrorCodeEnum.ValidationError);
+        }
+    }
+
+    private static PlanItem BuildItem(Guid planId, CreatePlanItemDto dto, int fallbackOrder)
+    {
+        ValidateItemShapes([dto]);
+
+        return new PlanItem
+        {
+            TemplateId = planId,
+            Kind = dto.Kind,
+            // A kind that has no drill keeps no stale reference to one, and vice versa.
+            DrillId = dto.Kind.HasDrill() ? dto.DrillId : null,
+            Title = dto.Kind.HasDrill() ? null : dto.Title,
+            SectionId = dto.SectionId,
+            Duration = dto.Duration,
+            Notes = dto.Notes,
+            Order = dto.Order ?? fallbackOrder,
+        };
+    }
+
     private async Task RecalculateTotalDurationAsync(Guid planId)
     {
         var plan = await _planRepository.GetByIdAsync(planId);
@@ -1200,6 +1205,7 @@ public class TrainingPlanService : ITrainingPlanService
 
         var items = await _itemRepository.GetByTemplateAsync(planId);
         plan.TotalDuration = items.Sum(i => i.Duration);
+        plan.CoachedDuration = items.Where(i => i.Kind.IsCoached()).Sum(i => i.Duration);
         plan.UpdatedAt = DateTime.UtcNow;
 
         _planRepository.Update(plan);
