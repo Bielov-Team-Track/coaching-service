@@ -38,7 +38,8 @@ public interface IClubsGrpcClient
     Task<bool> IsUserClubMemberAsync(Guid userId, Guid clubId);
 
     /// <summary>
-    /// Check whether a user has a coaching role (HeadCoach or Owner) in a club.
+    /// Check whether a user is an active member with a coaching role
+    /// (HeadCoach, Admin, or Owner) in a club.
     /// </summary>
     Task<bool> IsUserCoachInClubAsync(Guid userId, Guid clubId);
 }

@@ -119,7 +119,11 @@ public class DrillService : IDrillService
             if (!userId.HasValue)
                 throw new ForbiddenException("This drill is private");
 
-            if (drill.CreatedByUserId != userId.Value)
+            var canRead = drill.CreatedByUserId == userId.Value;
+            if (!canRead && drill.ClubId.HasValue)
+                canRead = await _clubsClient.IsUserClubMemberAsync(userId.Value, drill.ClubId.Value);
+
+            if (!canRead)
             {
                 throw new ForbiddenException("This drill is private");
             }
@@ -135,6 +139,9 @@ public class DrillService : IDrillService
     {
         if (string.IsNullOrWhiteSpace(request.Name))
             throw new BadRequestException("Name is required", ErrorCodeEnum.ValidationError);
+
+        if (request.ClubId.HasValue)
+            await EnsureCanManageClubDrillsAsync(request.ClubId.Value, userId);
 
         // Validate variation drill IDs exist
         var variationDrillIds = request.Variations?.Select(v => v.DrillId).Distinct().ToList() ?? [];
@@ -225,6 +232,18 @@ public class DrillService : IDrillService
         if (!CanModifyDrill(drill, userId))
             throw new ForbiddenException("Only the creator can update this drill");
 
+        if (string.IsNullOrWhiteSpace(request.Name))
+            throw new BadRequestException("Name is required", ErrorCodeEnum.ValidationError);
+
+        // Updating a club drill affects the current club even when the request moves it out.
+        // A move to another club affects both clubs, so authorization is required in each.
+        var affectedClubIds = new[] { drill.ClubId, request.ClubId }
+            .Where(clubId => clubId.HasValue)
+            .Select(clubId => clubId!.Value)
+            .Distinct();
+        foreach (var clubId in affectedClubIds)
+            await EnsureCanManageClubDrillsAsync(clubId, userId);
+
         // Validate variation drill IDs exist
         var variationDrillIds = request.Variations?.Select(v => v.DrillId).Distinct().ToList() ?? [];
         if (variationDrillIds.Count > 0)
@@ -271,6 +290,9 @@ public class DrillService : IDrillService
                 var equipmentInput = request.Equipment[i];
                 drill.Equipment.Add(new DrillEquipment
                 {
+                    // This entity is being attached to an already tracked aggregate. An empty
+                    // generated key tells EF unequivocally that this is a new child row.
+                    Id = Guid.Empty,
                     DrillId = drill.Id,
                     Name = equipmentInput.Name,
                     IsOptional = equipmentInput.IsOptional,
@@ -288,6 +310,7 @@ public class DrillService : IDrillService
                 var variationInput = request.Variations[i];
                 drill.Variations.Add(new DrillVariation
                 {
+                    Id = Guid.Empty,
                     SourceDrillId = drill.Id,
                     TargetDrillId = variationInput.DrillId,
                     Note = variationInput.Note,
@@ -296,7 +319,10 @@ public class DrillService : IDrillService
             }
         }
 
-        _drillRepository.Update(drill);
+        // GetByIdWithDetailsAsync returns a tracked aggregate. Saving it directly lets EF keep
+        // replacement children as Added and removed children as Deleted. Calling Update on the
+        // whole graph would mark the newly generated equipment/variation IDs as Modified and
+        // issue UPDATE statements for rows that do not exist.
         await _drillRepository.SaveChangesAsync();
 
         // Re-fetch with details for proper mapping
@@ -350,6 +376,12 @@ public class DrillService : IDrillService
     {
         if (!clubId.HasValue) return null;
         return await _clubsClient.IsUserClubMemberAsync(userId, clubId.Value) ? clubId : null;
+    }
+
+    private async Task EnsureCanManageClubDrillsAsync(Guid clubId, Guid userId)
+    {
+        if (!await _clubsClient.IsUserCoachInClubAsync(userId, clubId))
+            throw new ForbiddenException("Only club HeadCoach or above can manage club drills");
     }
 
     // =========================================================================

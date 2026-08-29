@@ -134,7 +134,8 @@ public class ClubsGrpcClient : IClubsGrpcClient
                 UserId = userId.ToString(),
                 ClubId = clubId.ToString()
             });
-            return response.Roles.Any(r => r == "HeadCoach" || r == "Owner");
+            // Keep this aligned with clubs-service's ClubMemberExtensions.IsHeadCoachOrAbove.
+            return response.IsMember && response.Roles.Any(r => r is "HeadCoach" or "Admin" or "Owner");
         }
         catch (Exception ex)
         {

@@ -1,16 +1,14 @@
-using System.Text;
 using Coaching.Application.Interfaces.Services;
 using Coaching.Infrastructure.Data.Context;
 using MassTransit;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.IdentityModel.Tokens;
 using NSubstitute;
+using Shared.Services.FileStorage.Intefaces;
 using Shared.Testing.Fixtures;
 
 namespace Coaching.Tests.Integration.Fixtures;
@@ -27,6 +25,7 @@ public class CoachingApiFactory : WebApplicationFactory<Program>
     public IEventsGrpcClient EventsGrpcClient { get; private set; } = null!;
     public IClubsGrpcClient ClubsGrpcClient { get; private set; } = null!;
     public IRunBroadcaster RunBroadcaster { get; private set; } = null!;
+    public IFileService FileService { get; private set; } = null!;
 
     public async Task InitializeAsync()
     {
@@ -35,6 +34,7 @@ public class CoachingApiFactory : WebApplicationFactory<Program>
         EventsGrpcClient = Substitute.For<IEventsGrpcClient>();
         ClubsGrpcClient = Substitute.For<IClubsGrpcClient>();
         RunBroadcaster = Substitute.For<IRunBroadcaster>();
+        FileService = Substitute.For<IFileService>();
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -52,6 +52,7 @@ public class CoachingApiFactory : WebApplicationFactory<Program>
             ReplaceWithSingleton(services, EventsGrpcClient);
             ReplaceWithSingleton(services, ClubsGrpcClient);
             ReplaceWithSingleton(services, RunBroadcaster);
+            ReplaceWithSingleton(services, FileService);
 
             // Remove MassTransit hosted services to prevent RabbitMQ connection attempts.
             var massTransitHosted = services.Where(d =>
@@ -72,29 +73,15 @@ public class CoachingApiFactory : WebApplicationFactory<Program>
                 services.Remove(d);
             services.AddDistributedMemoryCache();
 
-            services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-                .AddJwtBearer(options =>
-                {
-                    options.TokenValidationParameters = new TokenValidationParameters
-                    {
-                        ValidateIssuerSigningKey = true,
-                        IssuerSigningKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(JwtSecret)),
-                        ValidateIssuer = true,
-                        ValidIssuer = JwtIssuer,
-                        ValidateAudience = true,
-                        ValidAudience = JwtAudience,
-                        ValidateLifetime = true,
-                        ClockSkew = TimeSpan.Zero
-                    };
-                });
-
             var sp = services.BuildServiceProvider();
             using var scope = sp.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<CoachingDbContext>();
             db.Database.Migrate();
         });
 
-        builder.UseEnvironment("Testing");
+        // Development settings provide deterministic JWT configuration and detailed error
+        // responses. External infrastructure remains isolated by the replacements above.
+        builder.UseEnvironment("Development");
     }
 
     private static void ReplaceWithSingleton<T>(IServiceCollection services, T instance) where T : class
