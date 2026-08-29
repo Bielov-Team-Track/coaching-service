@@ -279,6 +279,17 @@ public class DrillService : IDrillService
         if (string.IsNullOrWhiteSpace(row.Name))
             return "Name is required";
 
+        // The database's limits, not taste. One over-long cell threw out of the single save and
+        // took every good row in the batch down with it.
+        if (row.Name.Trim().Length > Drill.NameMaxLength)
+            return $"Name is longer than {Drill.NameMaxLength} characters";
+
+        if (row.VideoUrl?.Length > Drill.VideoUrlMaxLength)
+            return $"Video link is longer than {Drill.VideoUrlMaxLength} characters";
+
+        if (row.Equipment?.Any(item => item.Name?.Length > DrillEquipment.NameMaxLength) == true)
+            return $"Equipment name is longer than {DrillEquipment.NameMaxLength} characters";
+
         if (row.Duration is < 0)
             return "Duration cannot be negative";
 

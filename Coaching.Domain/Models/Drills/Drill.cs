@@ -5,6 +5,9 @@ namespace Coaching.Domain.Models.Drills;
 
 public class Drill : BaseEntity
 {
+    public const int NameMaxLength = 200;
+    public const int VideoUrlMaxLength = 500;
+
     public required string Name { get; set; }
     public string? Description { get; set; }
 

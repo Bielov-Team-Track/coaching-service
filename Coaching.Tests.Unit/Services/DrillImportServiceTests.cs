@@ -200,6 +200,70 @@ public class DrillImportServiceTests
     }
 
     [Test]
+    public async Task ImportAsync_WithNameLongerThanTheColumn_ReportsTheRowRatherThanFailingTheBatch()
+    {
+        // Arrange — the length ceiling is the database's, and blowing it threw a
+        // DbUpdateException out of the single save, losing every good row with it.
+        var overlong = new string('a', Drill.NameMaxLength + 1);
+        var request = ImportRequest([Row(1, "Good one"), Row(2, overlong), Row(3, "Another good one")]);
+
+        // Act
+        var result = await _sut.ImportAsync(request, ImporterId);
+
+        // Assert
+        result.Imported.Should().Be(2);
+        result.Failed.Should().Be(1);
+        result.Results.Single(r => r.RowNumber == 2).Error.Should()
+            .Be($"Name is longer than {Drill.NameMaxLength} characters");
+        _persisted.Select(d => d.Name).Should().Equal("Good one", "Another good one");
+    }
+
+    [Test]
+    public async Task ImportAsync_WithNameExactlyTheColumnWidth_Accepts()
+    {
+        // Arrange
+        var exact = new string('a', Drill.NameMaxLength);
+
+        // Act
+        var result = await _sut.ImportAsync(ImportRequest([Row(1, exact)]), ImporterId);
+
+        // Assert
+        result.Imported.Should().Be(1);
+    }
+
+    [Test]
+    public async Task ImportAsync_WithVideoUrlLongerThanTheColumn_ReportsTheRow()
+    {
+        // Arrange
+        var row = Row(1, "Has a long link") with { VideoUrl = new string('u', Drill.VideoUrlMaxLength + 1) };
+
+        // Act
+        var result = await _sut.ImportAsync(ImportRequest([row]), ImporterId);
+
+        // Assert
+        result.Failed.Should().Be(1);
+        result.Results.Single().Error.Should().Be($"Video link is longer than {Drill.VideoUrlMaxLength} characters");
+    }
+
+    [Test]
+    public async Task ImportAsync_WithEquipmentNameLongerThanTheColumn_ReportsTheRow()
+    {
+        // Arrange
+        var row = Row(1, "Has long equipment") with
+        {
+            Equipment = [new DrillEquipmentInput(new string('e', DrillEquipment.NameMaxLength + 1))]
+        };
+
+        // Act
+        var result = await _sut.ImportAsync(ImportRequest([row]), ImporterId);
+
+        // Assert
+        result.Failed.Should().Be(1);
+        result.Results.Single().Error.Should()
+            .Be($"Equipment name is longer than {DrillEquipment.NameMaxLength} characters");
+    }
+
+    [Test]
     public async Task ImportAsync_TrimsTheName()
     {
         // Arrange
