@@ -61,6 +61,17 @@ public class DrillsController : Shared.Microservices.Controllers.BaseApiControll
     }
 
     /// <summary>
+    /// Create many drills at once from a parsed spreadsheet.
+    /// </summary>
+    [HttpPost("drills/import")]
+    public async Task<IActionResult> Import([FromBody] ImportDrillsDto request)
+    {
+        CheckIsUserLoggedIn();
+        var result = await _drillService.ImportAsync(request, JwtPayload.UserId);
+        return Ok(result);
+    }
+
+    /// <summary>
     /// Update a drill.
     /// </summary>
     [HttpPut("drills/{id:guid}")]

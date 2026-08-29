@@ -30,6 +30,12 @@ public class DrillService : IDrillService
     private readonly IMapper _mapper;
     private readonly ILogger<DrillService> _logger;
 
+    /// <summary>
+    /// The most rows one import request may carry. Public because the ceiling is part of the
+    /// contract: a client with a larger spreadsheet has to split it into batches of this size.
+    /// </summary>
+    public const int MaxImportRows = 500;
+
     public DrillService(
         IDrillRepository drillRepository,
         IDrillLikeRepository likeRepository,
@@ -221,6 +227,109 @@ public class DrillService : IDrillService
         var dto = _mapper.Map<DrillDto>(createdDrill);
         await EnrichWithClubInfoAsync([dto]);
         return dto;
+    }
+
+    /// <summary>
+    /// Create many drills from a parsed spreadsheet. Rows that fail validation are reported back
+    /// against their own line number rather than failing the batch, so one bad cell in a hundred
+    /// rows costs the coach one correction instead of the whole import.
+    /// </summary>
+    public async Task<ImportDrillsResultDto> ImportAsync(ImportDrillsDto request, Guid userId)
+    {
+        if (request.Drills is null || request.Drills.Count == 0)
+            throw new BadRequestException("No drills to import", ErrorCodeEnum.ValidationError);
+
+        if (request.Drills.Count > MaxImportRows)
+            throw new BadRequestException(
+                $"An import carries at most {MaxImportRows} drills; this one has {request.Drills.Count}",
+                ErrorCodeEnum.ValidationError);
+
+        // The destination is chosen once for the batch, so the club is authorized once too.
+        if (request.ClubId.HasValue)
+            await EnsureCanManageClubDrillsAsync(request.ClubId.Value, userId);
+
+        var results = new List<ImportDrillResultDto>(request.Drills.Count);
+        var toCreate = new List<Drill>();
+
+        foreach (var row in request.Drills)
+        {
+            var error = ValidateImportRow(row);
+            if (error is not null)
+            {
+                results.Add(new ImportDrillResultDto(row.RowNumber, row.Name, null, error));
+                continue;
+            }
+
+            var drill = BuildImportedDrill(row, request, userId);
+            toCreate.Add(drill);
+            results.Add(new ImportDrillResultDto(row.RowNumber, drill.Name, drill.Id, null));
+        }
+
+        if (toCreate.Count > 0)
+        {
+            _drillRepository.AddRange(toCreate);
+            await _drillRepository.SaveChangesAsync();
+        }
+
+        return new ImportDrillsResultDto(toCreate.Count, results.Count - toCreate.Count, results);
+    }
+
+    private static string? ValidateImportRow(ImportDrillRowDto row)
+    {
+        if (string.IsNullOrWhiteSpace(row.Name))
+            return "Name is required";
+
+        if (row.Duration is < 0)
+            return "Duration cannot be negative";
+
+        if (row.MinPlayers is < 0 || row.MaxPlayers is < 0)
+            return "Player counts cannot be negative";
+
+        if (row.MinPlayers.HasValue && row.MaxPlayers.HasValue && row.MinPlayers > row.MaxPlayers)
+            return "Minimum players cannot exceed maximum players";
+
+        return null;
+    }
+
+    private static Drill BuildImportedDrill(ImportDrillRowDto row, ImportDrillsDto request, Guid userId)
+    {
+        var instructions = ResolveProse(null, row.Instructions, ordered: true);
+        var coachingPoints = ResolveProse(null, row.CoachingPoints, ordered: false);
+
+        var drill = new Drill
+        {
+            Name = row.Name.Trim(),
+            Description = row.Description,
+            Category = row.Category,
+            Intensity = row.Intensity,
+            Visibility = request.Visibility,
+            Skills = row.Skills ?? [],
+            Duration = row.Duration,
+            MinPlayers = row.MinPlayers,
+            MaxPlayers = row.MaxPlayers,
+            InstructionsHtml = instructions.Html,
+            Instructions = instructions.Lines,
+            CoachingPointsHtml = coachingPoints.Html,
+            CoachingPoints = coachingPoints.Lines,
+            VideoUrl = row.VideoUrl,
+            CreatedByUserId = userId,
+            ClubId = request.ClubId,
+            LikeCount = 0
+        };
+
+        var equipment = row.Equipment ?? [];
+        for (int i = 0; i < equipment.Length; i++)
+        {
+            drill.Equipment.Add(new DrillEquipment
+            {
+                DrillId = drill.Id,
+                Name = equipment[i].Name,
+                IsOptional = equipment[i].IsOptional,
+                Order = i
+            });
+        }
+
+        return drill;
     }
 
     public async Task<DrillDto> UpdateAsync(UpdateDrillDto request, Guid userId)
