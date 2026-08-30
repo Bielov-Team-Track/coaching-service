@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using NSubstitute;
 using Shared.Services.FileStorage.Intefaces;
+using Shared.Services;
 using Shared.Testing.Fixtures;
 
 namespace Coaching.Tests.Integration.Fixtures;
@@ -27,6 +28,14 @@ public class CoachingApiFactory : WebApplicationFactory<Program>
     public IRunBroadcaster RunBroadcaster { get; private set; } = null!;
     public IFileService FileService { get; private set; } = null!;
 
+    /// <summary>
+    /// Only consulted on requests carrying an X-Acting-As header, by the shared authorizer behind
+    /// [AcceptsSubject]. The relationship answer comes from the cache service; the permission and
+    /// consent snapshot from the access source.
+    /// </summary>
+    public IGuardianCacheService GuardianCacheService { get; private set; } = null!;
+    public IGuardianAccessSource GuardianAccessSource { get; private set; } = null!;
+
     public async Task InitializeAsync()
     {
         await _postgresFixture.InitializeAsync();
@@ -35,6 +44,8 @@ public class CoachingApiFactory : WebApplicationFactory<Program>
         ClubsGrpcClient = Substitute.For<IClubsGrpcClient>();
         RunBroadcaster = Substitute.For<IRunBroadcaster>();
         FileService = Substitute.For<IFileService>();
+        GuardianCacheService = Substitute.For<IGuardianCacheService>();
+        GuardianAccessSource = Substitute.For<IGuardianAccessSource>();
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -53,6 +64,8 @@ public class CoachingApiFactory : WebApplicationFactory<Program>
             ReplaceWithSingleton(services, ClubsGrpcClient);
             ReplaceWithSingleton(services, RunBroadcaster);
             ReplaceWithSingleton(services, FileService);
+            ReplaceWithSingleton(services, GuardianCacheService);
+            ReplaceWithSingleton(services, GuardianAccessSource);
 
             // Remove MassTransit hosted services to prevent RabbitMQ connection attempts.
             var massTransitHosted = services.Where(d =>
