@@ -23,6 +23,10 @@ public class TrainingPlanRepository : BaseRepository<TrainingPlan>, ITrainingPla
                 .ThenInclude(i => i.Stations.OrderBy(st => st.Order))
                     .ThenInclude(st => st.Items.OrderBy(r => r.Order))
                         .ThenInclude(r => r.Drill)
+            .Include(t => t.Items)
+                .ThenInclude(i => i.Stations)
+                    .ThenInclude(st => st.Coaches)
+            .Include(t => t.Coaches)
             .Include(t => t.Creator)
             .FirstOrDefaultAsync(t => t.Id == id && !t.IsDeleted);
     }

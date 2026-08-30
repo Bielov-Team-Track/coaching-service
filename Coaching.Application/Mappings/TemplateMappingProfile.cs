@@ -88,6 +88,20 @@ public class PlanMappingProfile : Profile
         CreateMap<PlanStation, PlanStationDto>()
             .ForMember(d => d.Items, opt => opt.MapFrom(s => s.Items.OrderBy(i => i.Order)));
 
+        // A coach row carries only the user id; the name behind it lives in the profile replica
+        // and is filled in afterwards, once, for every coach on the plan at the same time.
+        CreateMap<PlanCoach, PlanCoachDto>()
+            .ForMember(d => d.FirstName, opt => opt.Ignore())
+            .ForMember(d => d.LastName, opt => opt.Ignore())
+            .ForMember(d => d.AvatarUrl, opt => opt.Ignore())
+            .ForMember(d => d.ImageThumbHash, opt => opt.Ignore());
+
+        CreateMap<PlanStationCoach, PlanCoachDto>()
+            .ForMember(d => d.FirstName, opt => opt.Ignore())
+            .ForMember(d => d.LastName, opt => opt.Ignore())
+            .ForMember(d => d.AvatarUrl, opt => opt.Ignore())
+            .ForMember(d => d.ImageThumbHash, opt => opt.Ignore());
+
         CreateMap<PlanStationItem, PlanStationItemDto>()
             .ForMember(d => d.Drill, opt => opt.MapFrom(s => s.Drill))
             .ForMember(d => d.IsCoached, opt => opt.MapFrom(s => s.Kind.IsCoached()));

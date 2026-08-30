@@ -50,6 +50,7 @@ public class TrainingPlanClubScopeTests
             Substitute.For<IDrillRepository>(),
             _clubsClient,
             Substitute.For<IEventsGrpcClient>(),
+            Substitute.For<IPlanCoachService>(),
             Substitute.For<IPublishEndpoint>(),
             _mapper,
             Substitute.For<ILogger<TrainingPlanService>>());
