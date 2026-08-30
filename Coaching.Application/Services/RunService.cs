@@ -257,8 +257,8 @@ public class RunService : IRunService
             ?? throw new EntityNotFoundException("No run has been started for this event");
 
         var creatorId = await GetPlanCreatorIdAsync(run.PlanId);
-        if (requestingUserId != creatorId)
-            throw new ForbiddenException("Only the plan creator can control the run");
+        if (requestingUserId != creatorId && !await _eventsGrpcClient.IsEventAdminAsync(eventId, requestingUserId))
+            throw new ForbiddenException("Only the plan creator or an event admin can control the run");
 
         return (run, true);
     }
