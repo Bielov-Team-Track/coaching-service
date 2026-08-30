@@ -36,4 +36,10 @@ public class TrainingPlan : BaseEntity
     public virtual ICollection<PlanLike> Likes { get; set; } = new List<PlanLike>();
     public virtual ICollection<PlanBookmark> Bookmarks { get; set; } = new List<PlanBookmark>();
     public virtual ICollection<PlanComment> Comments { get; set; } = new List<PlanComment>();
+
+    /// <summary>The courts this session has, per venue. Only an event's plan has any.</summary>
+    public virtual ICollection<PlanCourtBooking> CourtBookings { get; set; } = new List<PlanCourtBooking>();
+
+    /// <summary>Where each activity happens, per venue. Only an event's plan has any.</summary>
+    public virtual ICollection<PlanItemPlacement> Placements { get; set; } = new List<PlanItemPlacement>();
 }
