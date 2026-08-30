@@ -19,4 +19,7 @@ public class PlanStation : BaseEntity
     // Navigation properties
     public virtual PlanItem Item { get; set; } = null!;
     public virtual ICollection<PlanStationItem> Items { get; set; } = new List<PlanStationItem>();
+
+    /// <summary>The coaches running this group.</summary>
+    public virtual ICollection<PlanStationCoach> Coaches { get; set; } = new List<PlanStationCoach>();
 }
