@@ -1110,19 +1110,50 @@ public class TrainingPlanService : ITrainingPlanService
                 var newItem = new PlanItem
                 {
                     TemplateId = targetPlanId,
+                    Kind = sourceItem.Kind,
                     DrillId = sourceItem.DrillId,
+                    Title = sourceItem.Title,
                     SectionId = sourceItem.SectionId.HasValue && sectionIdMap.ContainsKey(sourceItem.SectionId.Value)
                         ? sectionIdMap[sourceItem.SectionId.Value]
                         : null,
                     Duration = sourceItem.Duration,
+                    PlannedDuration = sourceItem.PlannedDuration,
                     Notes = sourceItem.Notes,
-                    Order = sourceItem.Order
+                    Order = sourceItem.Order,
+                    Stations = CopyStations(sourceItem)
                 };
                 _itemRepository.Add(newItem);
             }
             await _itemRepository.SaveChangesAsync();
         }
     }
+
+    /// <summary>
+    /// The groups of a copied Stations row, rebuilt under new ids. A copy that carries the row
+    /// but not its groups is an empty block: the split IS the row's content, and dropping it
+    /// silently turned every loaded template's stations into a blank stretch of practice.
+    /// </summary>
+    private static List<PlanStation> CopyStations(PlanItem sourceItem) =>
+        sourceItem.Stations
+            .OrderBy(st => st.Order)
+            .Select(st => new PlanStation
+            {
+                Name = st.Name,
+                Order = st.Order,
+                Items = st.Items
+                    .OrderBy(r => r.Order)
+                    .Select(r => new PlanStationItem
+                    {
+                        Kind = r.Kind,
+                        DrillId = r.DrillId,
+                        Title = r.Title,
+                        Duration = r.Duration,
+                        Notes = r.Notes,
+                        Order = r.Order
+                    })
+                    .ToList()
+            })
+            .ToList();
 
     private async Task PublishPlanUpdatedAsync(TrainingPlan plan, string action)
     {
