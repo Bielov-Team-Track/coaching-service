@@ -51,13 +51,17 @@ public class CoachingApiFactory : WebApplicationFactory<Program>
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        // S3 options are validated the first time they are resolved, and in a real deployment
-        // they come from the environment. A test host has none, so every endpoint that
-        // constructs DrillService returned 500 before its own code ran. The file service
-        // itself is substituted below; these values only have to satisfy the validator.
+        // Settings that come from the environment in a real deployment and so are absent from a
+        // test host. The tokens the tests sign must be validated with the same key the host
+        // reads, and the S3 options are validated the moment they are resolved — without
+        // either, endpoints failed before their own code ran. Mirrors EventsApiFactory.
         builder.ConfigureAppConfiguration(config =>
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
+                ["Jwt:Secret"] = JwtSecret,
+                ["Jwt:Issuer"] = JwtIssuer,
+                ["Jwt:Audience"] = JwtAudience,
+                ["Jwt:ExpiryMinutes"] = "60",
                 ["S3:Bucket"] = "test-bucket",
                 ["S3:PublicBaseUrl"] = "https://cdn.test",
                 ["S3:PresignedUrlExpiryMinutes"] = "15",
