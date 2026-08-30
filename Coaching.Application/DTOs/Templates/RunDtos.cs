@@ -32,12 +32,40 @@ public class RunItemDto
 {
     public Guid Id { get; set; }
     public Guid PlanItemId { get; set; }
+
+    // What the row is, snapshotted with the run: a client reading a run never has to fetch the
+    // plan to find out whether it is looking at a drill, a break or a block of stations.
+    public ItemKind Kind { get; set; }
+    public string? Title { get; set; }
+
     public Guid? DrillId { get; set; }
     public int Order { get; set; }
     public int PlannedDurationSeconds { get; set; }
     public int ActualElapsedSeconds { get; set; }
     public DateTime? StartedAt { get; set; }
     public DateTime? CompletedAt { get; set; }
+
+    /// <summary>The groups running side by side. Only a Stations row has any.</summary>
+    public List<RunStationDto> Stations { get; set; } = new();
+}
+
+public class RunStationDto
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public int Order { get; set; }
+    public List<RunStationItemDto> Items { get; set; } = new();
+}
+
+public class RunStationItemDto
+{
+    public Guid Id { get; set; }
+    public ItemKind Kind { get; set; }
+    public Guid? DrillId { get; set; }
+    public string? Title { get; set; }
+    public int Order { get; set; }
+    public int DurationSeconds { get; set; }
+    public string? Notes { get; set; }
 }
 
 // Body for POST .../run/advance — guards against double-tap / concurrent advance.

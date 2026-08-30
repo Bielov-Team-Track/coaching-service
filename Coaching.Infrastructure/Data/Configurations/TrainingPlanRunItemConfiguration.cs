@@ -14,6 +14,12 @@ public class TrainingPlanRunItemConfiguration : IEntityTypeConfiguration<Trainin
         builder.Property(i => i.RunId).IsRequired();
         builder.Property(i => i.PlanItemId).IsRequired();
 
+        builder.Property(i => i.Kind)
+            .HasConversion<int>()
+            .IsRequired();
+
+        builder.Property(i => i.Title).HasMaxLength(PlanItem.TitleMaxLength);
+
         builder.HasIndex(i => new { i.RunId, i.Order });
     }
 }

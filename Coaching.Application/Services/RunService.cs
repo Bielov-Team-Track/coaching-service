@@ -81,12 +81,15 @@ public class RunService : IRunService
         {
             RunId = run!.Id,
             PlanItemId = item.Id,
+            Kind = item.Kind,
+            Title = item.Title,
             DrillId = item.DrillId,
             Order = item.Order,
             PlannedDurationSeconds = item.Duration * SecondsPerMinute,
             ActualElapsedSeconds = 0,
             StartedAtUtc = item.Id == firstItem?.Id ? now : null,
             CompletedAtUtc = null,
+            Stations = SnapshotStations(item),
         };
 
         if (run == null)
@@ -126,12 +129,15 @@ public class RunService : IRunService
                 }
                 else
                 {
+                    runItem.Kind = item.Kind;
+                    runItem.Title = item.Title;
                     runItem.DrillId = item.DrillId;
                     runItem.Order = item.Order;
                     runItem.PlannedDurationSeconds = item.Duration * SecondsPerMinute;
                     runItem.ActualElapsedSeconds = 0;
                     runItem.StartedAtUtc = item.Id == firstItem?.Id ? now : null;
                     runItem.CompletedAtUtc = null;
+                    ResnapshotStations(runItem, item);
                 }
             }
         }
@@ -146,6 +152,50 @@ public class RunService : IRunService
 
         await _runRepository.SaveChangesAsync();
         return await BroadcastAsync(eventId, run, requestingUserId == plan.CreatedByUserId);
+    }
+
+    /// <summary>
+    /// The run's own copy of a Stations row's groups, in seconds. Taken here rather than read
+    /// from the plan on every request for the same reason the drill id is: the plan can be
+    /// edited — or the block deleted — while the practice is running, and the coach on the
+    /// court is running what they started, not what the plan says now.
+    /// </summary>
+    private static List<RunStation> SnapshotStations(PlanItem item) =>
+        item.Stations
+            .OrderBy(st => st.Order)
+            .Select(st => new RunStation
+            {
+                Name = st.Name,
+                Order = st.Order,
+                Items = st.Items
+                    .OrderBy(r => r.Order)
+                    .Select(r => new RunStationItem
+                    {
+                        Kind = r.Kind,
+                        DrillId = r.DrillId,
+                        Title = r.Title,
+                        Order = r.Order,
+                        DurationSeconds = r.Duration * SecondsPerMinute,
+                        Notes = r.Notes
+                    })
+                    .ToList()
+            })
+            .ToList();
+
+    /// <summary>
+    /// A kept run item's groups are snapshot and nothing else — they hold no elapsed time and no
+    /// progress — so a restart replaces them wholesale instead of reconciling them row by row.
+    /// The run item itself is still reused, which is the point of the reconcile above: its
+    /// timings belong to the run, and only the plan's shape is being re-read.
+    /// </summary>
+    private static void ResnapshotStations(TrainingPlanRunItem runItem, PlanItem item)
+    {
+        runItem.Stations.Clear();
+        foreach (var station in SnapshotStations(item))
+        {
+            station.RunItemId = runItem.Id;
+            runItem.Stations.Add(station);
+        }
     }
 
     public async Task<RunDto> PauseAsync(Guid eventId, Guid requestingUserId)
@@ -268,7 +318,11 @@ public class RunService : IRunService
 
     private async Task<TrainingPlan> GetInstancePlanOrThrowAsync(Guid eventId)
     {
-        var plan = await InstancePlanQuery(eventId).Include(p => p.Items).FirstOrDefaultAsync()
+        var plan = await InstancePlanQuery(eventId)
+            .Include(p => p.Items)
+                .ThenInclude(i => i.Stations)
+                    .ThenInclude(s => s.Items)
+            .FirstOrDefaultAsync()
             ?? throw new EntityNotFoundException("No training plan is attached to this event");
 
         return plan;
@@ -318,12 +372,36 @@ public class RunService : IRunService
             {
                 Id = i.Id,
                 PlanItemId = i.PlanItemId,
+                Kind = i.Kind,
+                Title = i.Title,
                 DrillId = i.DrillId,
                 Order = i.Order,
                 PlannedDurationSeconds = i.PlannedDurationSeconds,
                 ActualElapsedSeconds = i.ActualElapsedSeconds,
                 StartedAt = i.StartedAtUtc,
-                CompletedAt = i.CompletedAtUtc
+                CompletedAt = i.CompletedAtUtc,
+                Stations = i.Stations
+                    .OrderBy(s => s.Order)
+                    .Select(s => new RunStationDto
+                    {
+                        Id = s.Id,
+                        Name = s.Name,
+                        Order = s.Order,
+                        Items = s.Items
+                            .OrderBy(r => r.Order)
+                            .Select(r => new RunStationItemDto
+                            {
+                                Id = r.Id,
+                                Kind = r.Kind,
+                                DrillId = r.DrillId,
+                                Title = r.Title,
+                                Order = r.Order,
+                                DurationSeconds = r.DurationSeconds,
+                                Notes = r.Notes
+                            })
+                            .ToList()
+                    })
+                    .ToList()
             })
             .ToList()
     };
