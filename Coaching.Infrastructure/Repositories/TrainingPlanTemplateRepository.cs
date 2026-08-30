@@ -17,6 +17,12 @@ public class TrainingPlanRepository : BaseRepository<TrainingPlan>, ITrainingPla
             .Include(t => t.Sections.OrderBy(s => s.Order))
             .Include(t => t.Items.OrderBy(i => i.Order))
                 .ThenInclude(i => i.Drill)
+            // A Stations row is nothing without its groups: loading the row alone is what
+            // made a saved split come back empty.
+            .Include(t => t.Items)
+                .ThenInclude(i => i.Stations.OrderBy(st => st.Order))
+                    .ThenInclude(st => st.Items.OrderBy(r => r.Order))
+                        .ThenInclude(r => r.Drill)
             .Include(t => t.Creator)
             .FirstOrDefaultAsync(t => t.Id == id && !t.IsDeleted);
     }

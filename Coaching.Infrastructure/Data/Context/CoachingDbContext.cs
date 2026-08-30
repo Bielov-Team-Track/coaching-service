@@ -27,6 +27,8 @@ public class CoachingDbContext : BaseDbContext
     public DbSet<TrainingPlan> TrainingPlans => Set<TrainingPlan>();
     public DbSet<PlanSection> PlanSections => Set<PlanSection>();
     public DbSet<PlanItem> PlanItems => Set<PlanItem>();
+    public DbSet<PlanStation> PlanStations => Set<PlanStation>();
+    public DbSet<PlanStationItem> PlanStationItems => Set<PlanStationItem>();
     public DbSet<PlanLike> PlanLikes => Set<PlanLike>();
     public DbSet<PlanBookmark> PlanBookmarks => Set<PlanBookmark>();
     public DbSet<PlanComment> PlanComments => Set<PlanComment>();

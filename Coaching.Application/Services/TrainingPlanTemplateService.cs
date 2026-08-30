@@ -395,6 +395,10 @@ public class TrainingPlanService : ITrainingPlanService
             .Include(p => p.Sections.OrderBy(s => s.Order))
             .Include(p => p.Items.OrderBy(i => i.Order))
                 .ThenInclude(i => i.Drill)
+            .Include(p => p.Items)
+                .ThenInclude(i => i.Stations.OrderBy(st => st.Order))
+                    .ThenInclude(st => st.Items.OrderBy(r => r.Order))
+                        .ThenInclude(r => r.Drill)
             .Include(p => p.Creator)
             .FirstOrDefaultAsync(p => p.EventId == eventId && p.PlanType == PlanType.Instance && !p.IsDeleted);
 
@@ -1154,6 +1158,11 @@ public class TrainingPlanService : ITrainingPlanService
         var drillIds = items
             .Where(i => i.Kind.HasDrill() && i.DrillId.HasValue)
             .Select(i => i.DrillId!.Value)
+            .Concat(items
+                .SelectMany(i => i.Stations ?? [])
+                .SelectMany(st => st.Items ?? [])
+                .Where(r => r.Kind.HasDrill() && r.DrillId.HasValue)
+                .Select(r => r.DrillId!.Value))
             .Distinct();
 
         foreach (var drillId in drillIds)
@@ -1177,6 +1186,31 @@ public class TrainingPlanService : ITrainingPlanService
 
             if (!dto.Kind.HasDrill() && string.IsNullOrWhiteSpace(dto.Title))
                 throw new BadRequestException($"A {dto.Kind} needs a title", ErrorCodeEnum.ValidationError);
+
+            // Groups divide a Stations row. Hanging them off anything else would store a
+            // split nothing draws, and the client would lose it on the next save.
+            if (dto.Stations?.Count > 0 && dto.Kind != ItemKind.Stations)
+                throw new BadRequestException($"A {dto.Kind} cannot have groups", ErrorCodeEnum.ValidationError);
+
+            foreach (var station in dto.Stations ?? [])
+            {
+                if (string.IsNullOrWhiteSpace(station.Name))
+                    throw new BadRequestException("A group needs a name", ErrorCodeEnum.ValidationError);
+
+                foreach (var row in station.Items ?? [])
+                {
+                    // A group holds the practice, not more structure: a section is the plan's
+                    // to divide, and stations inside stations has no meaning on a court.
+                    if (row.Kind is ItemKind.Stations)
+                        throw new BadRequestException("A group cannot contain stations", ErrorCodeEnum.ValidationError);
+
+                    if (row.Kind.HasDrill() && !row.DrillId.HasValue)
+                        throw new BadRequestException("A drill item needs a drill", ErrorCodeEnum.ValidationError);
+
+                    if (!row.Kind.HasDrill() && string.IsNullOrWhiteSpace(row.Title))
+                        throw new BadRequestException($"A {row.Kind} needs a title", ErrorCodeEnum.ValidationError);
+                }
+            }
         }
     }
 
@@ -1195,7 +1229,39 @@ public class TrainingPlanService : ITrainingPlanService
             Duration = dto.Duration,
             Notes = dto.Notes,
             Order = dto.Order ?? fallbackOrder,
+            PlannedDuration = dto.Kind == ItemKind.Stations ? dto.PlannedDuration : null,
+            Stations = BuildStations(dto),
         };
+    }
+
+    /// <summary>
+    /// The groups of a Stations row, built with it so one SaveChangesAsync writes the block
+    /// and its groups together rather than leaving a split half-stored.
+    /// </summary>
+    private static List<PlanStation> BuildStations(CreatePlanItemDto dto)
+    {
+        if (dto.Kind != ItemKind.Stations) return [];
+
+        return (dto.Stations ?? [])
+            .OrderBy(st => st.Order)
+            .Select((st, stationIndex) => new PlanStation
+            {
+                Name = st.Name,
+                Order = stationIndex,
+                Items = (st.Items ?? [])
+                    .OrderBy(r => r.Order)
+                    .Select((row, rowIndex) => new PlanStationItem
+                    {
+                        Kind = row.Kind,
+                        DrillId = row.Kind.HasDrill() ? row.DrillId : null,
+                        Title = row.Kind.HasDrill() ? null : row.Title,
+                        Duration = row.Duration,
+                        Notes = row.Notes,
+                        Order = rowIndex,
+                    })
+                    .ToList(),
+            })
+            .ToList();
     }
 
     private async Task RecalculateTotalDurationAsync(Guid planId)
@@ -1346,6 +1412,10 @@ public class TrainingPlanService : ITrainingPlanService
             .Take(filter.PageSize)
             .Include(t => t.Items)
                 .ThenInclude(i => i.Drill)
+            .Include(t => t.Items)
+                .ThenInclude(i => i.Stations.OrderBy(st => st.Order))
+                    .ThenInclude(st => st.Items.OrderBy(r => r.Order))
+                        .ThenInclude(r => r.Drill)
             .Include(t => t.Sections)
             .Include(t => t.Creator)
             .ToListAsync();

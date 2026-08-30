@@ -76,6 +76,35 @@ public class PlanItemDto
 
     /// <summary>Whether this row is coaching time. Breaks and meetings are not.</summary>
     public bool IsCoached { get; set; }
+
+    /// <summary>Stations only: the length the coach asked for, which the groups may exceed.</summary>
+    public int? PlannedDuration { get; set; }
+
+    /// <summary>Stations only: the groups running side by side inside this row.</summary>
+    public List<PlanStationDto> Stations { get; set; } = new();
+}
+
+public class PlanStationDto
+{
+    public Guid Id { get; set; }
+    public required string Name { get; set; }
+    public int Order { get; set; }
+    public List<PlanStationItemDto> Items { get; set; } = new();
+}
+
+public class PlanStationItemDto
+{
+    public Guid Id { get; set; }
+    public ItemKind Kind { get; set; }
+    public Guid? DrillId { get; set; }
+    public string? Title { get; set; }
+    public int Order { get; set; }
+    public int Duration { get; set; }
+    public string? Notes { get; set; }
+    public DrillDto? Drill { get; set; }
+
+    /// <summary>Whether this row is coaching time. Breaks are not.</summary>
+    public bool IsCoached { get; set; }
 }
 
 // Request DTOs
@@ -116,6 +145,23 @@ public record CreatePlanItemDto(
     int Duration,
     string? Notes,
     int? Order = null,
+    ItemKind Kind = ItemKind.Drill,
+    string? Title = null,
+    int? PlannedDuration = null,
+    List<CreatePlanStationDto>? Stations = null
+);
+
+public record CreatePlanStationDto(
+    string Name,
+    int Order,
+    List<CreatePlanStationItemDto>? Items = null
+);
+
+public record CreatePlanStationItemDto(
+    Guid? DrillId,
+    int Duration,
+    string? Notes,
+    int Order,
     ItemKind Kind = ItemKind.Drill,
     string? Title = null
 );

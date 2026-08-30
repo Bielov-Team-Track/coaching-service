@@ -29,8 +29,18 @@ public class PlanItem : BaseEntity
     /// </summary>
     public string? Notes { get; set; }
 
+    /// <summary>
+    /// Stations only: the length the coach asked for. <see cref="Duration"/> is that or the
+    /// longest group, whichever is greater — kept apart so a group that temporarily outgrows
+    /// the block does not overwrite the intent.
+    /// </summary>
+    public int? PlannedDuration { get; set; }
+
     // Navigation properties
     public virtual TrainingPlan Plan { get; set; } = null!;
     public virtual PlanSection? Section { get; set; }
     public virtual Drill? Drill { get; set; }
+
+    /// <summary>The groups running side by side. Only a Stations row has any.</summary>
+    public virtual ICollection<PlanStation> Stations { get; set; } = new List<PlanStation>();
 }

@@ -82,6 +82,14 @@ public class PlanMappingProfile : Profile
         // client has to re-derive it and get a different answer.
         CreateMap<PlanItem, PlanItemDto>()
             .ForMember(d => d.Drill, opt => opt.MapFrom(s => s.Drill))
+            .ForMember(d => d.IsCoached, opt => opt.MapFrom(s => s.Kind.IsCoached()))
+            .ForMember(d => d.Stations, opt => opt.MapFrom(s => s.Stations.OrderBy(st => st.Order)));
+
+        CreateMap<PlanStation, PlanStationDto>()
+            .ForMember(d => d.Items, opt => opt.MapFrom(s => s.Items.OrderBy(i => i.Order)));
+
+        CreateMap<PlanStationItem, PlanStationItemDto>()
+            .ForMember(d => d.Drill, opt => opt.MapFrom(s => s.Drill))
             .ForMember(d => d.IsCoached, opt => opt.MapFrom(s => s.Kind.IsCoached()));
 
         CreateMap<CreatePlanItemDto, PlanItem>()
@@ -90,6 +98,7 @@ public class PlanMappingProfile : Profile
             .ForMember(d => d.Plan, opt => opt.Ignore())
             .ForMember(d => d.Section, opt => opt.Ignore())
             .ForMember(d => d.Drill, opt => opt.Ignore())
+            .ForMember(d => d.Stations, opt => opt.Ignore())
             .ForMember(d => d.Order, opt => opt.Ignore());
 
         // Comment mappings
