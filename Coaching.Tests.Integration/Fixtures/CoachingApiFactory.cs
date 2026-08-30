@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using NSubstitute;
@@ -50,6 +51,18 @@ public class CoachingApiFactory : WebApplicationFactory<Program>
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
+        // S3 options are validated the first time they are resolved, and in a real deployment
+        // they come from the environment. A test host has none, so every endpoint that
+        // constructs DrillService returned 500 before its own code ran. The file service
+        // itself is substituted below; these values only have to satisfy the validator.
+        builder.ConfigureAppConfiguration(config =>
+            config.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["S3:Bucket"] = "test-bucket",
+                ["S3:PublicBaseUrl"] = "https://cdn.test",
+                ["S3:PresignedUrlExpiryMinutes"] = "15",
+            }));
+
         builder.ConfigureServices(services =>
         {
             var dbDescriptor = services.SingleOrDefault(d =>
