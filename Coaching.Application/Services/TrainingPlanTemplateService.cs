@@ -2,6 +2,7 @@ using AutoMapper;
 using Coaching.Application.DTOs.Templates;
 using Coaching.Application.Interfaces.Repositories;
 using Coaching.Application.Interfaces.Services;
+using Coaching.Application.RichText;
 using Coaching.Domain.Enums;
 using Coaching.Domain.Models.Templates;
 using MassTransit;
@@ -12,6 +13,7 @@ using Shared.DTOs.Errors;
 using Shared.Enums;
 using Shared.Exceptions;
 using Shared.Messaging.Contracts.Events.Coaching;
+using Shared.Models;
 
 namespace Coaching.Application.Services;
 
@@ -25,6 +27,8 @@ public class TrainingPlanService : ITrainingPlanService
     private readonly IPlanCommentRepository _commentRepository;
     private readonly IDrillRepository _drillRepository;
     private readonly IRepository<PlanItemDialValue> _dialValueRepository;
+    private readonly IRepository<PlanStation> _stationRepository;
+    private readonly IRepository<PlanStationItem> _stationItemRepository;
     private readonly IClubsGrpcClient _clubsClient;
     private readonly IEventsGrpcClient _eventsGrpcClient;
     private readonly IPlanCoachService _planCoachService;
@@ -41,6 +45,8 @@ public class TrainingPlanService : ITrainingPlanService
         IPlanCommentRepository commentRepository,
         IDrillRepository drillRepository,
         IRepository<PlanItemDialValue> dialValueRepository,
+        IRepository<PlanStation> stationRepository,
+        IRepository<PlanStationItem> stationItemRepository,
         IClubsGrpcClient clubsClient,
         IEventsGrpcClient eventsGrpcClient,
         IPlanCoachService planCoachService,
@@ -56,6 +62,8 @@ public class TrainingPlanService : ITrainingPlanService
         _commentRepository = commentRepository;
         _drillRepository = drillRepository;
         _dialValueRepository = dialValueRepository;
+        _stationRepository = stationRepository;
+        _stationItemRepository = stationItemRepository;
         _clubsClient = clubsClient;
         _eventsGrpcClient = eventsGrpcClient;
         _planCoachService = planCoachService;
@@ -188,67 +196,25 @@ public class TrainingPlanService : ITrainingPlanService
         _planRepository.Update(plan);
         await _planRepository.SaveChangesAsync();
 
-        // Replace sections and items if provided (full replace strategy for wizard saves)
+        // A save reconciles against what is already there rather than clearing it: a row resent
+        // by id IS that row. Everything keyed to a row's id carries no foreign key back to it —
+        // a station's coaches, a floor placement, a run's progress — so recreating the row left
+        // all of it pointing at an id that no longer existed. Sections go first: an item may be
+        // moving into one the same save creates, or out of one it deletes.
         if (request.Sections != null || request.Items != null)
         {
-            // Delete existing items first (they reference sections via FK)
-            var existingItems = await _itemRepository.Query()
-                .Where(i => i.TemplateId == plan.Id)
-                .ToListAsync();
-            foreach (var item in existingItems)
-                _itemRepository.Delete(item);
+            await GuardPayloadIdsAsync(plan, request.Sections, request.Items);
 
-            // The recorded dial values are keyed to those item ids, so they go with them. The
-            // payload brings the replacements — which is why they ride inside it.
-            var existingValues = await _dialValueRepository.Query()
-                .Where(v => v.PlanId == plan.Id)
-                .ToListAsync();
-            foreach (var value in existingValues)
-                _dialValueRepository.Delete(value);
-
-            await _itemRepository.SaveChangesAsync();
-
-            // Delete existing sections
-            var existingSections = await _sectionRepository.Query()
-                .Where(s => s.TemplateId == plan.Id)
-                .ToListAsync();
-            foreach (var section in existingSections)
-                _sectionRepository.Delete(section);
-            await _sectionRepository.SaveChangesAsync();
-
-            // Create new sections with client-provided IDs so items can reference them
             if (request.Sections != null)
-            {
-                foreach (var sectionDto in request.Sections.OrderBy(s => s.Order))
-                {
-                    var section = new PlanSection
-                    {
-                        TemplateId = plan.Id,
-                        Name = sectionDto.Name,
-                        Order = sectionDto.Order
-                    };
-                    if (sectionDto.Id.HasValue)
-                        section.Id = sectionDto.Id.Value;
-                    _sectionRepository.Add(section);
-                }
-                await _sectionRepository.SaveChangesAsync();
-            }
+                ReconcileSections(plan, request.Sections);
 
-            // Create new items
-            if (request.Items != null && request.Items.Count > 0)
+            if (request.Items != null)
             {
                 await ValidateItemDrillsAsync(request.Items);
-
-                int order = 1;
-                var dialValues = new List<PlanItemDialValue>();
-                foreach (var itemDto in request.Items)
-                {
-                    _itemRepository.Add(BuildItem(plan.Id, itemDto, order++, dialValues));
-                }
-                foreach (var value in dialValues)
-                    _dialValueRepository.Add(value);
-                await _itemRepository.SaveChangesAsync();
+                await ReconcileItemsAsync(plan, request.Items);
             }
+
+            await _itemRepository.SaveChangesAsync();
 
             await RecalculateTotalDurationAsync(plan.Id);
         }
@@ -1310,28 +1276,308 @@ public class TrainingPlanService : ITrainingPlanService
         }
     }
 
+    /// <summary>
+    /// An id a payload sends is either this plan's own row or nobody's. One that belongs to
+    /// another plan is a caller mistake rather than a new row: it would be built as an insert and
+    /// collide on the primary key mid-save. The same id sent twice is refused for the same
+    /// reason — the second entry would silently fold into the first and take its dial values.
+    /// </summary>
+    private async Task GuardPayloadIdsAsync(
+        TrainingPlan plan, List<CreatePlanSectionDto>? sections, List<CreatePlanItemDto>? items)
+    {
+        var stations = (items ?? []).SelectMany(i => i.Stations ?? []).ToList();
+        var planStations = plan.Items.SelectMany(i => i.Stations).ToList();
+
+        // Sequential on purpose: every repository here resolves the same scoped DbContext, and
+        // EF throws the moment two of these queries overlap.
+        await EnsureIdsAreFreeAsync(
+            SentIds(sections, s => s.Id),
+            plan.Sections.Select(s => s.Id),
+            _sectionRepository.Query(),
+            "section");
+
+        await EnsureIdsAreFreeAsync(
+            SentIds(items, i => i.Id),
+            plan.Items.Select(i => i.Id),
+            _itemRepository.Query(),
+            "item");
+
+        await EnsureIdsAreFreeAsync(
+            SentIds(stations, st => st.Id),
+            planStations.Select(st => st.Id),
+            _stationRepository.Query(),
+            "group");
+
+        await EnsureIdsAreFreeAsync(
+            SentIds(stations.SelectMany(st => st.Items ?? []), r => r.Id),
+            planStations.SelectMany(st => st.Items).Select(r => r.Id),
+            _stationItemRepository.Query(),
+            "group row");
+    }
+
+    private static List<Guid> SentIds<T>(IEnumerable<T>? entries, Func<T, Guid?> id) =>
+        (entries ?? []).Select(id).Where(v => v.HasValue).Select(v => v!.Value).ToList();
+
+    private static async Task EnsureIdsAreFreeAsync<T>(
+        List<Guid> sent, IEnumerable<Guid> planOwn, IQueryable<T> all, string what)
+        where T : BaseEntity
+    {
+        if (sent.Count == 0) return;
+
+        if (sent.Distinct().Count() != sent.Count)
+            throw new BadRequestException(
+                $"The same {what} id appears twice in this payload", ErrorCodeEnum.ValidationError);
+
+        var own = planOwn.ToHashSet();
+        var foreign = sent.Where(id => !own.Contains(id)).ToList();
+        if (foreign.Count == 0) return;
+
+        if (await all.AnyAsync(e => foreign.Contains(e.Id)))
+            throw new BadRequestException(
+                $"A {what} id in this payload belongs to another plan", ErrorCodeEnum.ValidationError);
+    }
+
+    /// <summary>
+    /// Sections resent by id keep their rows, so the items sitting in them keep their home. A
+    /// section the payload no longer names goes, and its items are set loose by the FK rather
+    /// than deleted with it.
+    /// </summary>
+    private void ReconcileSections(TrainingPlan plan, List<CreatePlanSectionDto> sections)
+    {
+        var kept = new HashSet<Guid>();
+
+        foreach (var dto in sections.OrderBy(s => s.Order))
+        {
+            var section = dto.Id.HasValue ? plan.Sections.FirstOrDefault(s => s.Id == dto.Id.Value) : null;
+
+            if (section == null)
+            {
+                section = new PlanSection { TemplateId = plan.Id, Name = dto.Name, Order = dto.Order };
+                // The wizard mints an id before the row is saved; honouring it is what lets the
+                // next save recognise the row rather than build a second one.
+                if (dto.Id.HasValue) section.Id = dto.Id.Value;
+
+                plan.Sections.Add(section);
+                _sectionRepository.Add(section);
+            }
+            else
+            {
+                section.Name = dto.Name;
+                section.Order = dto.Order;
+                section.UpdatedAt = DateTime.UtcNow;
+                _sectionRepository.Update(section);
+            }
+
+            kept.Add(section.Id);
+        }
+
+        foreach (var gone in plan.Sections.Where(s => !kept.Contains(s.Id)).ToList())
+        {
+            _sectionRepository.Delete(gone);
+            plan.Sections.Remove(gone);
+        }
+    }
+
+    /// <summary>
+    /// Items resent by id keep their rows. A new row states itself against the item set as well
+    /// as joining the plan's collection: BaseEntity gives every entity an id in its constructor,
+    /// so a row merely added to a tracked collection reads to EF as an existing one and is saved
+    /// as an UPDATE that matches nothing. Same reason as the run reconcile in RunService.
+    /// </summary>
+    private async Task ReconcileItemsAsync(TrainingPlan plan, List<CreatePlanItemDto> items)
+    {
+        var storedValues = await _dialValueRepository.Query()
+            .Where(v => v.PlanId == plan.Id)
+            .ToListAsync();
+
+        var wantedValues = new List<PlanItemDialValue>();
+        var kept = new HashSet<Guid>();
+        var fallbackOrder = 1;
+
+        foreach (var dto in items)
+        {
+            var order = fallbackOrder++;
+            var item = dto.Id.HasValue ? plan.Items.FirstOrDefault(i => i.Id == dto.Id.Value) : null;
+
+            if (item == null)
+            {
+                item = BuildItem(plan.Id, dto, order, wantedValues);
+                plan.Items.Add(item);
+                _itemRepository.Add(item);
+            }
+            else
+            {
+                ValidateItemShapes([dto]);
+                ApplyItemFields(item, dto, order);
+                item.UpdatedAt = DateTime.UtcNow;
+                ReconcileStations(plan.Id, item, dto, wantedValues);
+                CollectDialValues(plan.Id, item.Id, inStationGroup: false, dto.DialValues, wantedValues);
+                _itemRepository.Update(item);
+            }
+
+            kept.Add(item.Id);
+        }
+
+        foreach (var gone in plan.Items.Where(i => !kept.Contains(i.Id)).ToList())
+        {
+            _itemRepository.Delete(gone);
+            plan.Items.Remove(gone);
+        }
+
+        ReconcileDialValues(storedValues, wantedValues);
+    }
+
+    /// <summary>
+    /// A group resent by id keeps its row — and with it the coaches assigned to it, which are
+    /// never written from here. Recreating the row is what made the lead coach distribute the
+    /// staff again after every edit of the plan.
+    /// </summary>
+    private void ReconcileStations(
+        Guid planId, PlanItem item, CreatePlanItemDto dto, ICollection<PlanItemDialValue> dialValues)
+    {
+        // A row that has stopped being a Stations block keeps no groups.
+        List<CreatePlanStationDto> wanted = dto.Kind == ItemKind.Stations ? dto.Stations ?? [] : [];
+
+        var kept = new HashSet<Guid>();
+        var order = 0;
+
+        foreach (var stationDto in wanted.OrderBy(st => st.Order))
+        {
+            var station = stationDto.Id.HasValue
+                ? item.Stations.FirstOrDefault(st => st.Id == stationDto.Id.Value)
+                : null;
+
+            if (station == null)
+            {
+                station = new PlanStation { PlanItemId = item.Id, Name = stationDto.Name, Order = order };
+                if (stationDto.Id.HasValue) station.Id = stationDto.Id.Value;
+
+                item.Stations.Add(station);
+                _stationRepository.Add(station);
+            }
+            else
+            {
+                station.Name = stationDto.Name;
+                station.Order = order;
+                station.UpdatedAt = DateTime.UtcNow;
+                _stationRepository.Update(station);
+            }
+
+            order++;
+            kept.Add(station.Id);
+            ReconcileStationItems(planId, station, stationDto, dialValues);
+        }
+
+        foreach (var gone in item.Stations.Where(st => !kept.Contains(st.Id)).ToList())
+        {
+            _stationRepository.Delete(gone);
+            item.Stations.Remove(gone);
+        }
+    }
+
+    private void ReconcileStationItems(
+        Guid planId, PlanStation station, CreatePlanStationDto dto, ICollection<PlanItemDialValue> dialValues)
+    {
+        var kept = new HashSet<Guid>();
+        var order = 0;
+
+        foreach (var rowDto in (dto.Items ?? []).OrderBy(r => r.Order))
+        {
+            var row = rowDto.Id.HasValue ? station.Items.FirstOrDefault(r => r.Id == rowDto.Id.Value) : null;
+
+            if (row == null)
+            {
+                row = BuildStationItem(rowDto, order);
+                row.StationId = station.Id;
+
+                station.Items.Add(row);
+                _stationItemRepository.Add(row);
+            }
+            else
+            {
+                ApplyStationItemFields(row, rowDto, order);
+                row.UpdatedAt = DateTime.UtcNow;
+                _stationItemRepository.Update(row);
+            }
+
+            order++;
+            kept.Add(row.Id);
+            CollectDialValues(planId, row.Id, inStationGroup: true, rowDto.DialValues, dialValues);
+        }
+
+        foreach (var gone in station.Items.Where(r => !kept.Contains(r.Id)).ToList())
+        {
+            _stationItemRepository.Delete(gone);
+            station.Items.Remove(gone);
+        }
+    }
+
+    /// <summary>
+    /// The payload says what every row it carries sets its dials to, so the stored rows are
+    /// brought to match: a changed answer is updated in place, a new one added, and anything the
+    /// payload no longer names removed — including the answers of a row that has just been
+    /// deleted, which nothing else would take, since these rows hold no key back to the item.
+    /// </summary>
+    private void ReconcileDialValues(List<PlanItemDialValue> stored, List<PlanItemDialValue> wanted)
+    {
+        static (Guid?, Guid?, string) Use(PlanItemDialValue value) =>
+            (value.ItemId, value.StationItemId, value.DialName);
+
+        var byUse = new Dictionary<(Guid?, Guid?, string), PlanItemDialValue>();
+        foreach (var value in stored)
+            byUse[Use(value)] = value;
+
+        var claimed = new HashSet<Guid>();
+
+        foreach (var value in wanted)
+        {
+            if (!byUse.TryGetValue(Use(value), out var match))
+            {
+                _dialValueRepository.Add(value);
+                continue;
+            }
+
+            claimed.Add(match.Id);
+            if (match.Value == value.Value) continue;
+
+            match.Value = value.Value;
+            _dialValueRepository.Update(match);
+        }
+
+        foreach (var gone in stored.Where(v => !claimed.Contains(v.Id)))
+            _dialValueRepository.Delete(gone);
+    }
+
     private static PlanItem BuildItem(
         Guid planId, CreatePlanItemDto dto, int fallbackOrder, ICollection<PlanItemDialValue> dialValues)
     {
         ValidateItemShapes([dto]);
 
-        var item = new PlanItem
-        {
-            TemplateId = planId,
-            Kind = dto.Kind,
-            // A kind that has no drill keeps no stale reference to one, and vice versa.
-            DrillId = dto.Kind.HasDrill() ? dto.DrillId : null,
-            Title = dto.Kind.HasDrill() ? null : dto.Title,
-            SectionId = dto.SectionId,
-            Duration = dto.Duration,
-            Notes = dto.Notes,
-            Order = dto.Order ?? fallbackOrder,
-            PlannedDuration = dto.Kind == ItemKind.Stations ? dto.PlannedDuration : null,
-            Stations = BuildStations(planId, dto, dialValues),
-        };
+        var item = new PlanItem { TemplateId = planId };
+        if (dto.Id.HasValue) item.Id = dto.Id.Value;
+
+        ApplyItemFields(item, dto, fallbackOrder);
+        item.Stations = BuildStations(planId, dto, dialValues);
 
         CollectDialValues(planId, item.Id, inStationGroup: false, dto.DialValues, dialValues);
         return item;
+    }
+
+    /// <summary>
+    /// What a payload entry says a row is. One place, so the build and the reconcile cannot
+    /// drift on what a kind is allowed to carry.
+    /// </summary>
+    private static void ApplyItemFields(PlanItem item, CreatePlanItemDto dto, int fallbackOrder)
+    {
+        item.Kind = dto.Kind;
+        // A kind that has no drill keeps no stale reference to one, and vice versa.
+        item.DrillId = dto.Kind.HasDrill() ? dto.DrillId : null;
+        item.Title = dto.Kind.HasDrill() ? null : dto.Title;
+        item.SectionId = dto.SectionId;
+        item.Duration = dto.Duration;
+        item.Notes = dto.Notes;
+        item.Order = dto.Order ?? fallbackOrder;
+        item.PlannedDuration = dto.Kind == ItemKind.Stations ? dto.PlannedDuration : null;
     }
 
     /// <summary>
@@ -1349,19 +1595,13 @@ public class TrainingPlanService : ITrainingPlanService
         foreach (var stationDto in (dto.Stations ?? []).OrderBy(st => st.Order))
         {
             var station = new PlanStation { Name = stationDto.Name, Order = stationIndex++ };
+            if (stationDto.Id.HasValue) station.Id = stationDto.Id.Value;
+
             var rowIndex = 0;
 
             foreach (var row in (stationDto.Items ?? []).OrderBy(r => r.Order))
             {
-                var built = new PlanStationItem
-                {
-                    Kind = row.Kind,
-                    DrillId = row.Kind.HasDrill() ? row.DrillId : null,
-                    Title = row.Kind.HasDrill() ? null : row.Title,
-                    Duration = row.Duration,
-                    Notes = row.Notes,
-                    Order = rowIndex++,
-                };
+                var built = BuildStationItem(row, rowIndex++);
 
                 station.Items.Add(built);
                 CollectDialValues(planId, built.Id, inStationGroup: true, row.DialValues, dialValues);
@@ -1373,11 +1613,30 @@ public class TrainingPlanService : ITrainingPlanService
         return stations;
     }
 
+    private static PlanStationItem BuildStationItem(CreatePlanStationItemDto dto, int order)
+    {
+        var row = new PlanStationItem();
+        if (dto.Id.HasValue) row.Id = dto.Id.Value;
+
+        ApplyStationItemFields(row, dto, order);
+        return row;
+    }
+
+    private static void ApplyStationItemFields(PlanStationItem row, CreatePlanStationItemDto dto, int order)
+    {
+        row.Kind = dto.Kind;
+        row.DrillId = dto.Kind.HasDrill() ? dto.DrillId : null;
+        row.Title = dto.Kind.HasDrill() ? null : dto.Title;
+        row.Duration = dto.Duration;
+        row.Notes = dto.Notes;
+        row.Order = order;
+    }
+
     /// <summary>
-    /// A use's dial values are written beside it rather than on it: saving a plan deletes and
-    /// recreates every item, so the rows hang off the plan and are rebuilt from the same
-    /// payload. A name no dial answers to is stored untouched — a dial removed from the drill
-    /// leaves its answers behind, and dropping them would lose the coach's work if it came back.
+    /// A use's dial values are written beside it rather than on it: the rows hang off the plan
+    /// and reach the use by id alone, so a save that drops the use has to take them by hand.
+    /// A name no dial answers to is stored untouched — a dial removed from the drill leaves its
+    /// answers behind, and dropping them would lose the coach's work if it came back.
     /// </summary>
     private static void CollectDialValues(
         Guid planId,
@@ -1390,9 +1649,12 @@ public class TrainingPlanService : ITrainingPlanService
 
         foreach (var (dialName, value) in values)
         {
-            if (dialName.Length > PlanItemDialValue.DialNameMaxLength)
+            // The name a dial no longer goes by is still a name; one that was never a dial name
+            // is a client bug, and storing it would put a key on the wire that comes back
+            // changed. See DialTokens.
+            if (!DialTokens.IsValidName(dialName))
                 throw new BadRequestException(
-                    $"A dial name is longer than {PlanItemDialValue.DialNameMaxLength} characters",
+                    $"'{dialName}' is not a dial name",
                     ErrorCodeEnum.ValidationError);
 
             if (value?.Length > PlanItemDialValue.ValueMaxLength)

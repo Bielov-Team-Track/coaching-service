@@ -67,6 +67,8 @@ public class PlanStationTests : UnitTestBase
             Substitute.For<IPlanCommentRepository>(),
             _drillRepository,
             dialValues,
+            Substitute.For<IRepository<PlanStation>>(),
+            Substitute.For<IRepository<PlanStationItem>>(),
             Substitute.For<IClubsGrpcClient>(),
             Substitute.For<IEventsGrpcClient>(),
             Substitute.For<IPlanCoachService>(),

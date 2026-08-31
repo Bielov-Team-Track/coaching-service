@@ -159,6 +159,7 @@ public record UpdatePlanDto(
     List<CreatePlanItemDto>? Items = null
 );
 
+/// <param name="Id">The section this entry is, when it already exists — see <see cref="CreatePlanItemDto.Id"/>.</param>
 public record CreatePlanSectionDto(
     string Name,
     int Order,
@@ -170,9 +171,15 @@ public record UpdatePlanSectionDto(
     int? Order
 );
 
+/// <param name="Id">
+/// The row this entry is, when it already exists. Absent for a row being added, in which case the
+/// server assigns one — or honours the id the client minted for it. Sending it back is what keeps
+/// a save from destroying everything keyed to the row: its station coaches, its floor placement,
+/// its progress in a run that is under way.
+/// </param>
 /// <param name="DialValues">
-/// What this use of the drill sets its dials to, by dial name. It rides the item because a save
-/// deletes and recreates every item — values sent any other way would not survive one.
+/// What this use of the drill sets its dials to, by dial name. It rides the item because the rows
+/// are keyed to it by id alone — values sent any other way would have nothing to attach to.
 /// </param>
 public record CreatePlanItemDto(
     Guid? DrillId,
@@ -184,15 +191,19 @@ public record CreatePlanItemDto(
     string? Title = null,
     int? PlannedDuration = null,
     List<CreatePlanStationDto>? Stations = null,
-    Dictionary<string, string>? DialValues = null
+    Dictionary<string, string>? DialValues = null,
+    Guid? Id = null
 );
 
+/// <param name="Id">The group this entry is, when it already exists — see <see cref="CreatePlanItemDto.Id"/>.</param>
 public record CreatePlanStationDto(
     string Name,
     int Order,
-    List<CreatePlanStationItemDto>? Items = null
+    List<CreatePlanStationItemDto>? Items = null,
+    Guid? Id = null
 );
 
+/// <param name="Id">The row this entry is, when it already exists — see <see cref="CreatePlanItemDto.Id"/>.</param>
 public record CreatePlanStationItemDto(
     Guid? DrillId,
     int Duration,
@@ -200,7 +211,8 @@ public record CreatePlanStationItemDto(
     int Order,
     ItemKind Kind = ItemKind.Drill,
     string? Title = null,
-    Dictionary<string, string>? DialValues = null
+    Dictionary<string, string>? DialValues = null,
+    Guid? Id = null
 );
 
 public record UpdatePlanItemDto(
