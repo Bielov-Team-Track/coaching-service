@@ -9,7 +9,9 @@ using Coaching.Domain.Models.Templates;
 using FluentAssertions;
 using MassTransit;
 using Microsoft.Extensions.Logging;
+using MockQueryable;
 using NSubstitute;
+using Shared.DataAccess.Repositories.Interfaces;
 using Shared.Exceptions;
 using Shared.Testing.Base;
 
@@ -36,6 +38,9 @@ public class TrainingPlanValidationTests : UnitTestBase
         _mapper.Map<TrainingPlanDetailDto>(Arg.Any<TrainingPlan?>())
             .Returns(new TrainingPlanDetailDto { Name = "plan" });
 
+        var dialValues = Substitute.For<IRepository<PlanItemDialValue>>();
+        dialValues.Query().Returns(new List<PlanItemDialValue>().BuildMock());
+
         _sut = new TrainingPlanService(
             _planRepository,
             Substitute.For<IPlanSectionRepository>(),
@@ -44,6 +49,7 @@ public class TrainingPlanValidationTests : UnitTestBase
             Substitute.For<IPlanBookmarkRepository>(),
             Substitute.For<IPlanCommentRepository>(),
             _drillRepository,
+            dialValues,
             Substitute.For<IClubsGrpcClient>(),
             Substitute.For<IEventsGrpcClient>(),
             Substitute.For<IPublishEndpoint>(),

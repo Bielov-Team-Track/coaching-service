@@ -82,6 +82,13 @@ public class PlanItemDto
 
     /// <summary>Stations only: the groups running side by side inside this row.</summary>
     public List<PlanStationDto> Stations { get; set; } = new();
+
+    /// <summary>
+    /// What this use of the drill decided its dials should say, by dial name. Empty for a row
+    /// with no drill, or one whose drill has no dials. A name with no matching dial is kept
+    /// rather than dropped — a dial removed from the drill leaves its answers behind harmlessly.
+    /// </summary>
+    public Dictionary<string, string> DialValues { get; set; } = new();
 }
 
 public class PlanStationDto
@@ -105,6 +112,9 @@ public class PlanStationItemDto
 
     /// <summary>Whether this row is coaching time. Breaks are not.</summary>
     public bool IsCoached { get; set; }
+
+    /// <summary>What this use of the drill decided its dials should say, by dial name.</summary>
+    public Dictionary<string, string> DialValues { get; set; } = new();
 }
 
 // Request DTOs
@@ -139,6 +149,10 @@ public record UpdatePlanSectionDto(
     int? Order
 );
 
+/// <param name="DialValues">
+/// What this use of the drill sets its dials to, by dial name. It rides the item because a save
+/// deletes and recreates every item — values sent any other way would not survive one.
+/// </param>
 public record CreatePlanItemDto(
     Guid? DrillId,
     Guid? SectionId,
@@ -148,7 +162,8 @@ public record CreatePlanItemDto(
     ItemKind Kind = ItemKind.Drill,
     string? Title = null,
     int? PlannedDuration = null,
-    List<CreatePlanStationDto>? Stations = null
+    List<CreatePlanStationDto>? Stations = null,
+    Dictionary<string, string>? DialValues = null
 );
 
 public record CreatePlanStationDto(
@@ -163,7 +178,8 @@ public record CreatePlanStationItemDto(
     string? Notes,
     int Order,
     ItemKind Kind = ItemKind.Drill,
-    string? Title = null
+    string? Title = null,
+    Dictionary<string, string>? DialValues = null
 );
 
 public record UpdatePlanItemDto(

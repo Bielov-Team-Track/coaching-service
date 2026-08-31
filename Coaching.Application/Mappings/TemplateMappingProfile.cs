@@ -80,9 +80,13 @@ public class PlanMappingProfile : Profile
 
         // Item mappings - Drill is local, map it directly. IsCoached is resolved here so no
         // client has to re-derive it and get a different answer.
+        // The values are not on the item — they hang off the plan, keyed to it — so the plan
+        // read fills them in after the map rather than AutoMapper reaching for a member that
+        // is deliberately not there.
         CreateMap<PlanItem, PlanItemDto>()
             .ForMember(d => d.Drill, opt => opt.MapFrom(s => s.Drill))
             .ForMember(d => d.IsCoached, opt => opt.MapFrom(s => s.Kind.IsCoached()))
+            .ForMember(d => d.DialValues, opt => opt.Ignore())
             .ForMember(d => d.Stations, opt => opt.MapFrom(s => s.Stations.OrderBy(st => st.Order)));
 
         CreateMap<PlanStation, PlanStationDto>()
@@ -90,7 +94,8 @@ public class PlanMappingProfile : Profile
 
         CreateMap<PlanStationItem, PlanStationItemDto>()
             .ForMember(d => d.Drill, opt => opt.MapFrom(s => s.Drill))
-            .ForMember(d => d.IsCoached, opt => opt.MapFrom(s => s.Kind.IsCoached()));
+            .ForMember(d => d.IsCoached, opt => opt.MapFrom(s => s.Kind.IsCoached()))
+            .ForMember(d => d.DialValues, opt => opt.Ignore());
 
         CreateMap<CreatePlanItemDto, PlanItem>()
             .ForMember(d => d.Id, opt => opt.Ignore())
