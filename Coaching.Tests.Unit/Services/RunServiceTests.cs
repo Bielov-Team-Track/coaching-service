@@ -39,7 +39,14 @@ public class RunServiceTests : UnitTestBase
         _planRepository = Substitute.For<ITrainingPlanRepository>();
         _broadcaster = Substitute.For<IRunBroadcaster>();
         _eventsGrpcClient = Substitute.For<IEventsGrpcClient>();
-        _sut = new RunService(_runRepository, _planRepository, _broadcaster, _eventsGrpcClient, TimeProvider);
+        _sut = new RunService(
+            _runRepository,
+            Substitute.For<ITrainingPlanRunItemRepository>(),
+            Substitute.For<IRunStationRepository>(),
+            _planRepository,
+            _broadcaster,
+            _eventsGrpcClient,
+            TimeProvider);
     }
 
     // Two-item instance plan created by CreatorId, attached to EventId.

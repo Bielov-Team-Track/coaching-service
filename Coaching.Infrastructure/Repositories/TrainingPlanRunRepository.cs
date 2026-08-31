@@ -14,6 +14,10 @@ public class TrainingPlanRunRepository : BaseRepository<TrainingPlanRun>, ITrain
     {
         return await _dbSet
             .Include(r => r.Items.OrderBy(i => i.Order))
+                // A Stations row is nothing without its groups, and a restart re-snapshots them:
+                // both the reading and the rebuilding need the old ones loaded.
+                .ThenInclude(i => i.Stations.OrderBy(s => s.Order))
+                    .ThenInclude(s => s.Items.OrderBy(r => r.Order))
             .FirstOrDefaultAsync(r => r.EventId == eventId && !r.IsDeleted);
     }
 }
