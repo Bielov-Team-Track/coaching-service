@@ -17,9 +17,8 @@ public class DrillDialService : IDrillDialService
 {
     private readonly IDrillRepository _drillRepository;
     private readonly IRepository<DrillDial> _dialRepository;
-    private readonly IPlanItemRepository _itemRepository;
-    private readonly IRepository<PlanStationItem> _stationItemRepository;
     private readonly IRepository<PlanItemDialValue> _valueRepository;
+    private readonly IDrillDialReconciler _reconciler;
     private readonly IRepository<DrillVariation> _variationRepository;
     private readonly IRepository<ImprovementPointDrill> _pointDrillRepository;
     private readonly IClubsGrpcClient _clubsClient;
@@ -28,23 +27,21 @@ public class DrillDialService : IDrillDialService
     public DrillDialService(
         IDrillRepository drillRepository,
         IRepository<DrillDial> dialRepository,
-        IPlanItemRepository itemRepository,
-        IRepository<PlanStationItem> stationItemRepository,
         IRepository<PlanItemDialValue> valueRepository,
         IRepository<DrillVariation> variationRepository,
         IRepository<ImprovementPointDrill> pointDrillRepository,
         IClubsGrpcClient clubsClient,
-        IDrillService drillService)
+        IDrillService drillService,
+        IDrillDialReconciler reconciler)
     {
         _drillRepository = drillRepository;
         _dialRepository = dialRepository;
-        _itemRepository = itemRepository;
-        _stationItemRepository = stationItemRepository;
         _valueRepository = valueRepository;
         _variationRepository = variationRepository;
         _pointDrillRepository = pointDrillRepository;
         _clubsClient = clubsClient;
         _drillService = drillService;
+        _reconciler = reconciler;
     }
 
     public async Task<DrillDto> AddAsync(Guid drillId, CreateDrillDialDto request, Guid userId)
@@ -52,7 +49,7 @@ public class DrillDialService : IDrillDialService
         var drill = await LoadForEditAsync(drillId, userId);
 
         var name = request.Name?.Trim() ?? string.Empty;
-        EnsureValidName(name);
+        _reconciler.EnsureValidName(name);
 
         if (drill.Dials.Any(d => d.Name == name))
             throw new BadRequestException($"This drill already has a dial called {name}", ErrorCodeEnum.ValidationError);
@@ -64,7 +61,7 @@ public class DrillDialService : IDrillDialService
             Kind = request.Kind,
             Order = drill.Dials.Count == 0 ? 0 : drill.Dials.Max(d => d.Order) + 1,
         };
-        ApplyKindFields(dial, request.Kind, request.DefaultValue, request.OnText, request.OffText, request.OnLabel, request.OffLabel);
+        _reconciler.ApplyKindFields(dial, request.Kind, request.DefaultValue, request.OnText, request.OffText, request.OnLabel, request.OffLabel);
 
         WriteInstructions(drill, request.InstructionsHtml, drill.Dials.Select(d => d.Name).Append(name));
 
@@ -72,10 +69,10 @@ public class DrillDialService : IDrillDialService
 
         // Every plan already using this drill gets the default, so the coach opens an existing
         // plan and finds the new dial set rather than blank.
-        var uses = await LoadUsesAsync(drill.Id);
-        var already = await ValuesForUsesAsync(uses);
-        foreach (var use in uses.Where(u => !already.Any(v => Belongs(v, u) && v.DialName == name)))
-            _valueRepository.Add(NewValue(use, name, dial.DefaultValue));
+        var uses = await _reconciler.LoadUsesAsync(drill.Id);
+        var already = await _reconciler.ValuesForUsesAsync(uses);
+        foreach (var use in uses.Where(u => !already.Any(v => _reconciler.Belongs(v, u) && v.DialName == name)))
+            _valueRepository.Add(_reconciler.NewValue(use, name, dial.DefaultValue));
 
         await _drillRepository.SaveChangesAsync();
         return await ReadAsync(drillId, userId);
@@ -90,7 +87,7 @@ public class DrillDialService : IDrillDialService
         var renaming = !string.IsNullOrEmpty(newName) && newName != dial.Name;
         if (renaming)
         {
-            EnsureValidName(newName!);
+            _reconciler.EnsureValidName(newName!);
             if (drill.Dials.Any(d => d.Id != dial.Id && d.Name == newName))
                 throw new BadRequestException($"This drill already has a dial called {newName}", ErrorCodeEnum.ValidationError);
 
@@ -98,7 +95,7 @@ public class DrillDialService : IDrillDialService
                 throw new BadRequestException("A rename has to bring the re-tokenized instructions with it", ErrorCodeEnum.ValidationError);
         }
 
-        ApplyKindFields(
+        _reconciler.ApplyKindFields(
             dial,
             dial.Kind,
             request.DefaultValue ?? dial.DefaultValue,
@@ -130,8 +127,8 @@ public class DrillDialService : IDrillDialService
 
         WriteInstructions(drill, request.InstructionsHtml, drill.Dials.Where(d => d.Id != dial.Id).Select(d => d.Name));
 
-        var uses = await LoadUsesAsync(drill.Id);
-        foreach (var value in (await ValuesForUsesAsync(uses)).Where(v => v.DialName == dial.Name))
+        var uses = await _reconciler.LoadUsesAsync(drill.Id);
+        foreach (var value in (await _reconciler.ValuesForUsesAsync(uses)).Where(v => v.DialName == dial.Name))
             _valueRepository.Delete(value);
 
         _dialRepository.Delete(dial);
@@ -152,13 +149,13 @@ public class DrillDialService : IDrillDialService
         var supplied = request.ValuesForSourceUses ?? [];
         foreach (var (dialName, value) in supplied)
         {
-            EnsureValidName(dialName);
-            EnsureValueFits(value);
+            _reconciler.EnsureValidName(dialName);
+            _reconciler.EnsureValueFits(value);
         }
 
-        var (spine, grouped) = await LoadUseEntitiesAsync(source.Id);
-        var uses = AsUses(spine, grouped).ToList();
-        var existing = await ValuesForUsesAsync(uses);
+        var (spine, grouped) = await _reconciler.LoadUseEntitiesAsync(source.Id);
+        var uses = _reconciler.AsUses(spine, grouped).ToList();
+        var existing = await _reconciler.ValuesForUsesAsync(uses);
 
         foreach (var item in spine) item.DrillId = keep.Id;
         foreach (var row in grouped) row.DrillId = keep.Id;
@@ -167,8 +164,8 @@ public class DrillDialService : IDrillDialService
         // supplied values are for the ones it has never been asked.
         foreach (var use in uses)
             foreach (var (dialName, value) in supplied)
-                if (!existing.Any(v => Belongs(v, use) && v.DialName == dialName))
-                    _valueRepository.Add(NewValue(use, dialName, value));
+                if (!existing.Any(v => _reconciler.Belongs(v, use) && v.DialName == dialName))
+                    _valueRepository.Add(_reconciler.NewValue(use, dialName, value));
 
         await RepointBlockingReferencesAsync(source.Id, keep.Id);
 
@@ -225,10 +222,10 @@ public class DrillDialService : IDrillDialService
 
     private async Task RenameValuesAsync(Guid drillId, string oldName, string newName)
     {
-        var uses = await LoadUsesAsync(drillId);
+        var uses = await _reconciler.LoadUsesAsync(drillId);
         if (uses.Count == 0) return;
 
-        var rows = await ValuesForUsesAsync(uses);
+        var rows = await _reconciler.ValuesForUsesAsync(uses);
 
         foreach (var row in rows.Where(v => v.DialName == oldName).ToList())
         {
@@ -236,7 +233,7 @@ public class DrillDialService : IDrillDialService
             // Two rows cannot share a name on one use, and the live dial's answer is the one
             // that means anything — so it takes the stale row's place rather than colliding
             // with it mid-save.
-            var stale = rows.FirstOrDefault(v => v.DialName == newName && SameUse(v, row));
+            var stale = rows.FirstOrDefault(v => v.DialName == newName && _reconciler.SameUse(v, row));
             if (stale is not null)
             {
                 stale.Value = row.Value;
@@ -290,119 +287,4 @@ public class DrillDialService : IDrillDialService
         drill.InstructionsHtml = resolved.Html;
         drill.Instructions = resolved.Lines;
     }
-
-    private static void EnsureValidName(string name)
-    {
-        if (!DialTokens.IsValidName(name))
-            throw new BadRequestException(
-                $"'{name}' cannot be a dial name: it has to start with a lower-case letter and carry only letters and digits",
-                ErrorCodeEnum.ValidationError);
-    }
-
-    private static void EnsureValueFits(string? value)
-    {
-        if (value?.Length > DrillDial.ValueMaxLength)
-            throw new BadRequestException(
-                $"A dial value is longer than {DrillDial.ValueMaxLength} characters",
-                ErrorCodeEnum.ValidationError);
-    }
-
-    /// <summary>
-    /// A kind decides which fields mean anything. A Toggle carries the two sentences it swaps
-    /// between; every other kind carries none of them, so a kind change cannot leave a stale
-    /// sentence behind for the splice to find.
-    /// </summary>
-    private static void ApplyKindFields(
-        DrillDial dial, DialKind kind, string? defaultValue, string? onText, string? offText, string? onLabel, string? offLabel)
-    {
-        EnsureValueFits(defaultValue);
-        EnsureValueFits(onText);
-        EnsureValueFits(offText);
-
-        if (onLabel?.Length > DrillDial.LabelMaxLength || offLabel?.Length > DrillDial.LabelMaxLength)
-            throw new BadRequestException(
-                $"A dial label is longer than {DrillDial.LabelMaxLength} characters",
-                ErrorCodeEnum.ValidationError);
-
-        dial.Kind = kind;
-
-        if (kind == DialKind.Toggle)
-        {
-            if (string.IsNullOrWhiteSpace(onText) || string.IsNullOrWhiteSpace(offText))
-                throw new BadRequestException(
-                    "A toggle needs the sentence it reads when it is on and the one when it is off",
-                    ErrorCodeEnum.ValidationError);
-
-            dial.DefaultValue = bool.TryParse(defaultValue, out var on) && on ? "true" : "false";
-            dial.OnText = onText;
-            dial.OffText = offText;
-            dial.OnLabel = onLabel;
-            dial.OffLabel = offLabel;
-            return;
-        }
-
-        dial.DefaultValue = defaultValue ?? string.Empty;
-        dial.OnText = null;
-        dial.OffText = null;
-        dial.OnLabel = null;
-        dial.OffLabel = null;
-    }
-
-    /// <summary>Where a drill is used: a row on a plan's spine, or a row inside a station group.</summary>
-    private readonly record struct DrillUse(Guid Id, Guid PlanId, bool InStationGroup);
-
-    private async Task<List<DrillUse>> LoadUsesAsync(Guid drillId)
-    {
-        var (spine, grouped) = await LoadUseEntitiesAsync(drillId);
-        return AsUses(spine, grouped).ToList();
-    }
-
-    private async Task<(List<PlanItem> Spine, List<PlanStationItem> Grouped)> LoadUseEntitiesAsync(Guid drillId)
-    {
-        var spine = await _itemRepository.Query()
-            .Where(i => i.DrillId == drillId && !i.IsDeleted)
-            .ToListAsync();
-
-        // A group's rows live in their own table, and a drill is used just as much from inside
-        // one — the plan they belong to is two hops up.
-        var grouped = await _stationItemRepository.Query()
-            .Where(r => r.DrillId == drillId && !r.IsDeleted)
-            .Include(r => r.Station)
-                .ThenInclude(s => s.Item)
-            .ToListAsync();
-
-        return (spine, grouped);
-    }
-
-    private static IEnumerable<DrillUse> AsUses(List<PlanItem> spine, List<PlanStationItem> grouped) =>
-        spine.Select(i => new DrillUse(i.Id, i.TemplateId, false))
-            .Concat(grouped.Select(r => new DrillUse(r.Id, r.Station.Item.TemplateId, true)));
-
-    private async Task<List<PlanItemDialValue>> ValuesForUsesAsync(IReadOnlyCollection<DrillUse> uses)
-    {
-        if (uses.Count == 0) return [];
-
-        var itemIds = uses.Where(u => !u.InStationGroup).Select(u => u.Id).ToList();
-        var stationItemIds = uses.Where(u => u.InStationGroup).Select(u => u.Id).ToList();
-
-        return await _valueRepository.Query()
-            .Where(v => (v.ItemId != null && itemIds.Contains(v.ItemId.Value))
-                     || (v.StationItemId != null && stationItemIds.Contains(v.StationItemId.Value)))
-            .ToListAsync();
-    }
-
-    private static PlanItemDialValue NewValue(DrillUse use, string dialName, string value) => new()
-    {
-        PlanId = use.PlanId,
-        ItemId = use.InStationGroup ? null : use.Id,
-        StationItemId = use.InStationGroup ? use.Id : null,
-        DialName = dialName,
-        Value = value,
-    };
-
-    private static bool Belongs(PlanItemDialValue value, DrillUse use) =>
-        use.InStationGroup ? value.StationItemId == use.Id : value.ItemId == use.Id;
-
-    private static bool SameUse(PlanItemDialValue left, PlanItemDialValue right) =>
-        left.ItemId == right.ItemId && left.StationItemId == right.StationItemId;
 }

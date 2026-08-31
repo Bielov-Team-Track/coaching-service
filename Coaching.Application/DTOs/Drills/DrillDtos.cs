@@ -199,7 +199,8 @@ public record CreateDrillDto(
     string? VideoUrl,
     Guid? ClubId,
     string? InstructionsHtml = null,
-    string? CoachingPointsHtml = null
+    string? CoachingPointsHtml = null,
+    List<DrillDialInputDto>? Dials = null
 );
 
 public record UpdateDrillDto(
@@ -220,7 +221,8 @@ public record UpdateDrillDto(
     string? VideoUrl,
     Guid? ClubId,
     string? InstructionsHtml = null,
-    string? CoachingPointsHtml = null
+    string? CoachingPointsHtml = null,
+    List<DrillDialInputDto>? Dials = null
 );
 
 public class DrillFilterRequest

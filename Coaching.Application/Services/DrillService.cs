@@ -29,6 +29,7 @@ public class DrillService : IDrillService
     private readonly S3Settings _s3Settings;
     private readonly IMapper _mapper;
     private readonly ILogger<DrillService> _logger;
+    private readonly IDrillDialReconciler _dialReconciler;
 
     /// <summary>
     /// The most rows one import request may carry. Public because the ceiling is part of the
@@ -46,7 +47,8 @@ public class DrillService : IDrillService
         IFileService fileService,
         IOptions<S3Settings> s3Settings,
         IMapper mapper,
-        ILogger<DrillService> logger)
+        ILogger<DrillService> logger,
+        IDrillDialReconciler dialReconciler)
     {
         _drillRepository = drillRepository;
         _likeRepository = likeRepository;
@@ -58,6 +60,7 @@ public class DrillService : IDrillService
         _s3Settings = s3Settings.Value;
         _mapper = mapper;
         _logger = logger;
+        _dialReconciler = dialReconciler;
     }
 
     public async Task<PagedResponse<DrillDto>> GetByFilterAsync(DrillFilterRequest filter, Guid? userId = null)
@@ -220,6 +223,10 @@ public class DrillService : IDrillService
         }
 
         _drillRepository.Add(drill);
+
+        if (request.Dials is not null)
+            await _dialReconciler.ReconcileAsync(drill, request.Dials);
+
         await _drillRepository.SaveChangesAsync();
 
         // Re-fetch with details for proper mapping
@@ -438,6 +445,11 @@ public class DrillService : IDrillService
                 });
             }
         }
+
+        // Null leaves the dials alone — a client that has never heard of dials cannot
+        // strip them by omission.
+        if (request.Dials is not null)
+            await _dialReconciler.ReconcileAsync(drill, request.Dials);
 
         // GetByIdWithDetailsAsync returns a tracked aggregate. Saving it directly lets EF keep
         // replacement children as Added and removed children as Deleted. Calling Update on the

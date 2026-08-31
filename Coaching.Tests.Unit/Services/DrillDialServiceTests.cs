@@ -34,6 +34,7 @@ public class DrillDialServiceTests : UnitTestBase
     private IRepository<ImprovementPointDrill> _pointDrillRepository = null!;
     private IClubsGrpcClient _clubs = null!;
     private DrillDialService _sut = null!;
+    private DrillDialReconciler _reconciler = null!;
 
     private readonly Dictionary<Guid, Drill> _drills = [];
     private readonly List<PlanItem> _spine = [];
@@ -101,16 +102,17 @@ public class DrillDialServiceTests : UnitTestBase
         drillService.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<Guid?>())
             .Returns(new DrillDto { Name = "Serve receive" });
 
+        _reconciler = new DrillDialReconciler(_dialRepository, _itemRepository, _stationItemRepository, _valueRepository);
+
         _sut = new DrillDialService(
             _drillRepository,
             _dialRepository,
-            _itemRepository,
-            _stationItemRepository,
             _valueRepository,
             _variationRepository,
             _pointDrillRepository,
             _clubs,
-            drillService);
+            drillService,
+            _reconciler);
     }
 
     // =========================================================================

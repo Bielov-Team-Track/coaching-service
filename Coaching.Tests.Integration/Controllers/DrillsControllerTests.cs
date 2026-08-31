@@ -300,6 +300,88 @@ public class DrillsControllerTests
     }
 
     [Test]
+    public async Task Create_WithDials_PersistsThemWithTheDrill()
+    {
+        // Arrange
+        await SeedAsync([CreatorProfile()]);
+        SetAuth(CreatorId);
+        var request = CompleteCreateRequest() with
+        {
+            InstructionsHtml = "<ol><li><p>Serve {balls} balls</p></li></ol>",
+            Instructions = [],
+            Dials = [new DrillDialInputDto(null, "balls", DialKind.Number, "5")]
+        };
+
+        // Act
+        var response = await _client.PostAsJsonAsync("/v1/drills", request, JsonOptions);
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        var created = await response.Content.ReadFromJsonAsync<DrillDto>(JsonOptions);
+        created!.Dials.Select(d => (d.Name, d.Kind, d.DefaultValue)).Should().Equal(("balls", DialKind.Number, "5"));
+
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<CoachingDbContext>();
+        var dials = await db.DrillDials.AsNoTracking().Where(d => d.DrillId == created.Id).ToListAsync();
+        dials.Should().ContainSingle(d => d.Name == "balls" && d.DefaultValue == "5");
+    }
+
+    [Test]
+    public async Task Update_ReplacingADialWithASameNamedNewOne_SavesInOneUnitOfWork()
+    {
+        // Arrange — the editor's delete-row-then-retype-the-token flow: the doomed dial and its
+        // replacement share a name under a unique index, in one save.
+        var drill = NewDrill("Dialed drill", CreatorId);
+        await SeedAsync([CreatorProfile(), drill]);
+        await using (var seedScope = _factory.Services.CreateAsyncScope())
+        {
+            var seedDb = seedScope.ServiceProvider.GetRequiredService<CoachingDbContext>();
+            seedDb.DrillDials.Add(new DrillDial { DrillId = drill.Id, Name = "balls", Kind = DialKind.Number, DefaultValue = "3" });
+            await seedDb.SaveChangesAsync();
+        }
+        SetAuth(CreatorId);
+        var request = CompleteUpdateRequest(drill.Id) with
+        {
+            Dials = [new DrillDialInputDto(null, "balls", DialKind.Number, "7")]
+        };
+
+        // Act
+        var response = await _client.PutAsJsonAsync($"/v1/drills/{drill.Id}", request, JsonOptions);
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<CoachingDbContext>();
+        var dials = await db.DrillDials.AsNoTracking().Where(d => d.DrillId == drill.Id).ToListAsync();
+        dials.Should().ContainSingle(d => d.Name == "balls" && d.DefaultValue == "7");
+    }
+
+    [Test]
+    public async Task Update_WithoutDials_LeavesTheDialSetAlone()
+    {
+        // Arrange — a client that has never heard of dials must not strip them by omission.
+        var drill = NewDrill("Dialed drill", CreatorId);
+        await SeedAsync([CreatorProfile(), drill]);
+        await using (var seedScope = _factory.Services.CreateAsyncScope())
+        {
+            var seedDb = seedScope.ServiceProvider.GetRequiredService<CoachingDbContext>();
+            seedDb.DrillDials.Add(new DrillDial { DrillId = drill.Id, Name = "balls", Kind = DialKind.Number, DefaultValue = "3" });
+            await seedDb.SaveChangesAsync();
+        }
+        SetAuth(CreatorId);
+
+        // Act
+        var response = await _client.PutAsJsonAsync($"/v1/drills/{drill.Id}", CompleteUpdateRequest(drill.Id), JsonOptions);
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<CoachingDbContext>();
+        var dials = await db.DrillDials.AsNoTracking().Where(d => d.DrillId == drill.Id).ToListAsync();
+        dials.Should().ContainSingle(d => d.Name == "balls" && d.DefaultValue == "3");
+    }
+
+    [Test]
     public async Task Update_WithBlankName_ReturnsBadRequestWithoutChangingDrill()
     {
         // Arrange

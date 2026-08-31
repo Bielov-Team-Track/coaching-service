@@ -74,7 +74,8 @@ public class DrillServiceTests
             Substitute.For<IFileService>(),
             Options.Create(new S3Settings { Bucket = "test-bucket", PublicBaseUrl = "https://cdn.test" }),
             _mapper,
-            Substitute.For<ILogger<DrillService>>());
+            Substitute.For<ILogger<DrillService>>(),
+            Substitute.For<IDrillDialReconciler>());
     }
 
     private static Drill BuildDrill(

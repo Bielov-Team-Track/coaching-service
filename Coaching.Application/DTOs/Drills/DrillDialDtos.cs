@@ -25,6 +25,21 @@ public class DrillDialDto
 }
 
 /// <summary>
+/// A dial as the drill editor sends it back, whole-list with every save. Id names the dial it
+/// already was — a rename keeps every plan's values — and no Id is a dial born in this save.
+/// </summary>
+public record DrillDialInputDto(
+    Guid? Id,
+    string Name,
+    DialKind Kind,
+    string DefaultValue,
+    string? OnText = null,
+    string? OffText = null,
+    string? OnLabel = null,
+    string? OffLabel = null
+);
+
+/// <summary>
 /// Promoting a word to a dial. The client has already spliced the token into the prose and
 /// sends the result as <paramref name="InstructionsHtml"/>; the server checks the two agree
 /// before it stores either.
