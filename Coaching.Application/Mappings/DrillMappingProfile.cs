@@ -49,6 +49,9 @@ public class DrillMappingProfile : Profile
         // DrillEquipment mappings
         CreateMap<DrillEquipment, DrillEquipmentDto>();
 
+        // DrillDial mappings
+        CreateMap<DrillDial, DrillDialDto>();
+
         // DrillComment mappings
         CreateMap<DrillComment, DrillCommentDto>()
             .ForMember(dest => dest.Author, opt => opt.MapFrom(src => src.User != null ? new DrillCommentAuthorDto

@@ -39,6 +39,7 @@ public class DrillRepository : BaseRepository<Drill>, IDrillRepository
         return await _dbSet
             .Include(d => d.Attachments.OrderBy(a => a.Order))
             .Include(d => d.Equipment.OrderBy(e => e.Order))
+            .Include(d => d.Dials.OrderBy(dial => dial.Order))
             .Include(d => d.Variations.OrderBy(v => v.Order))
                 .ThenInclude(v => v.TargetDrill)
             .Include(d => d.Creator)
@@ -50,6 +51,7 @@ public class DrillRepository : BaseRepository<Drill>, IDrillRepository
         return await _dbSet
             .Include(d => d.Attachments.OrderBy(a => a.Order))
             .Include(d => d.Equipment.OrderBy(e => e.Order))
+            .Include(d => d.Dials.OrderBy(dial => dial.Order))
             .Include(d => d.Variations.OrderBy(v => v.Order))
                 .ThenInclude(v => v.TargetDrill)
             .FirstOrDefaultAsync(d => d.Id == id);
