@@ -53,17 +53,19 @@ public class PlanFloorModelTests
     }
 
     [Test]
-    public void AnActivityHasOnePlacePerVenue()
+    public void AnActivityHasOneRowPerZone()
     {
         // One filtered index per anchor kind: unfiltered, every station-item row would collide
-        // with every other on a null ItemId.
+        // with every other on a null ItemId. Zone in the key — an activity may hold several
+        // zones; nulls-not-distinct so two rows for the same whole court still collide.
         foreach (var anchor in new[] { "ItemId", "StationItemId" })
         {
             var index = Placement.GetIndexes()
-                .Single(i => i.Properties.Select(p => p.Name).SequenceEqual(new[] { "PlanId", "VenueId", anchor }));
+                .Single(i => i.Properties.Select(p => p.Name).SequenceEqual(new[] { "PlanId", "VenueId", anchor, "CourtId", "ZoneId" }));
 
-            index.IsUnique.Should().BeTrue($"one place per {anchor} per venue");
+            index.IsUnique.Should().BeTrue($"one row per {anchor} per zone");
             index.GetFilter().Should().Be($"\"{anchor}\" IS NOT NULL");
+            index.GetAreNullsDistinct().Should().BeFalse();
         }
     }
 

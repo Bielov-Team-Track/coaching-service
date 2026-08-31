@@ -149,7 +149,7 @@ public class PlanFloorService(
                     $"A name must be at most {PlanCourtBooking.TakenByMaxLength} characters"));
         }
 
-        var seen = new HashSet<Anchor>();
+        var seen = new HashSet<(Anchor Anchor, Guid CourtId, string? ZoneId)>();
 
         for (var i = 0; i < placements.Count; i++)
         {
@@ -171,15 +171,15 @@ public class PlanFloorService(
             if (!belongsToPlan)
                 errors.Add(new FieldError($"{field}.{(anchor.IsStationItem ? "stationItemId" : "itemId")}",
                     "NOT_FOUND", "This activity is not in this plan"));
-            else if (!seen.Add(anchor))
-                errors.Add(new FieldError(field, "DUPLICATE", "This activity is placed twice"));
+            else if (!seen.Add((anchor, placement.CourtId, placement.ZoneId)))
+                errors.Add(new FieldError(field, "DUPLICATE", "This activity is already on this zone"));
 
-            if (!splitByCourt.TryGetValue(placement.CourtId, out var split))
+            if (!splitByCourt.ContainsKey(placement.CourtId))
                 errors.Add(new FieldError($"{field}.courtId", "NOT_BOOKED",
                     "This court is not on this venue's floor"));
-            else if (!CourtZones.Allows(split, placement.ZoneId))
+            else if (!CourtZones.IsKnown(placement.ZoneId))
                 errors.Add(new FieldError($"{field}.zoneId", "INVALID_VALUE",
-                    $"A court split into {split} has no zone '{placement.ZoneId}'"));
+                    $"No court has a zone '{placement.ZoneId}'"));
         }
 
         if (errors.Count > 0)
@@ -231,31 +231,32 @@ public class PlanFloorService(
     private async Task<List<PlanItemPlacement>> ReconcilePlacementsAsync(
         Guid planId, Guid venueId, List<SavePlacementDto> incoming)
     {
-        var unmatched = (await LoadPlacementsAsync(planId, venueId)).ToDictionary(AnchorOf);
+        // A placement's identity is the whole tuple — one activity may hold several zones,
+        // so there is nothing to update in place: a row either survives as it is or goes.
+        // EF orders the deletes before the inserts inside one SaveChanges, the behaviour the
+        // dial reconciler already leans on under its unique index.
+        var unmatched = (await LoadPlacementsAsync(planId, venueId))
+            .ToDictionary(p => (AnchorOf(p), p.CourtId, p.ZoneId));
         var floor = new List<PlanItemPlacement>(incoming.Count);
 
         foreach (var dto in incoming)
         {
-            if (unmatched.Remove(AnchorOf(dto), out var row))
+            if (unmatched.Remove((AnchorOf(dto), dto.CourtId, dto.ZoneId), out var row))
             {
-                row.CourtId = dto.CourtId;
-                row.ZoneId = dto.ZoneId;
-                placementRepository.Update(row);
-            }
-            else
-            {
-                row = new PlanItemPlacement
-                {
-                    PlanId = planId,
-                    VenueId = venueId,
-                    CourtId = dto.CourtId,
-                    ZoneId = dto.ZoneId,
-                    ItemId = dto.ItemId,
-                    StationItemId = dto.StationItemId,
-                };
-                placementRepository.Add(row);
+                floor.Add(row);
+                continue;
             }
 
+            row = new PlanItemPlacement
+            {
+                PlanId = planId,
+                VenueId = venueId,
+                CourtId = dto.CourtId,
+                ZoneId = dto.ZoneId,
+                ItemId = dto.ItemId,
+                StationItemId = dto.StationItemId,
+            };
+            placementRepository.Add(row);
             floor.Add(row);
         }
 

@@ -207,13 +207,26 @@ public class PlanFloorServiceTests : UnitTestBase
     // ---------- where it may be placed ----------
 
     [Test]
-    public async Task PutFloorAsync_WhenTheZoneIsNotOnACourtSplitThatWay_Refuses()
+    public async Task PutFloorAsync_AnyGranularityLandsWhateverTheSplit()
     {
-        // Arrange — a quarter's key on a court that is only halved
+        // A quarter on a court whose booking is only halved: the split says how the free
+        // floor is offered, not what a placement may hold — one drill runs on the whole
+        // court, the next on its quarters.
+        var floor = await Save(
+            [Booking(CourtOneId, CourtSplit.Halves)],
+            [ItemAt(ItemId, CourtOneId, CourtZones.LeftNear)]);
+
+        // Assert
+        floor.Placements.Should().ContainSingle().Which.ZoneId.Should().Be(CourtZones.LeftNear);
+    }
+
+    [Test]
+    public async Task PutFloorAsync_WhenTheZoneIsNotAZoneAtAll_Refuses()
+    {
         // Act
         var save = async () => await Save(
             [Booking(CourtOneId, CourtSplit.Halves)],
-            [ItemAt(ItemId, CourtOneId, CourtZones.LeftNear)]);
+            [ItemAt(ItemId, CourtOneId, "XX")]);
 
         // Assert
         var thrown = await save.Should().ThrowAsync<ValidationException>();
@@ -246,12 +259,24 @@ public class PlanFloorServiceTests : UnitTestBase
     }
 
     [Test]
-    public async Task PutFloorAsync_WhenOneActivityIsPlacedTwice_Refuses()
+    public async Task PutFloorAsync_OneActivityMayHoldSeveralZones()
+    {
+        // A serving drill running across two courts at once is the point of the exercise.
+        var floor = await Save(
+            [Booking(CourtOneId, CourtSplit.Halves), Booking(CourtTwoId)],
+            [ItemAt(ItemId, CourtOneId, CourtZones.Left), ItemAt(ItemId, CourtTwoId)]);
+
+        // Assert
+        floor.Placements.Should().HaveCount(2).And.OnlyContain(p => p.ItemId == ItemId);
+    }
+
+    [Test]
+    public async Task PutFloorAsync_WhenOneActivityHoldsTheSameZoneTwice_Refuses()
     {
         // Act
         var save = async () => await Save(
-            [Booking(CourtOneId, CourtSplit.Halves), Booking(CourtTwoId)],
-            [ItemAt(ItemId, CourtOneId, CourtZones.Left), ItemAt(ItemId, CourtTwoId)]);
+            [Booking(CourtOneId, CourtSplit.Halves)],
+            [ItemAt(ItemId, CourtOneId, CourtZones.Left), ItemAt(ItemId, CourtOneId, CourtZones.Left)]);
 
         // Assert
         var thrown = await save.Should().ThrowAsync<ValidationException>();
@@ -298,18 +323,32 @@ public class PlanFloorServiceTests : UnitTestBase
     }
 
     [Test]
-    public async Task PutFloorAsync_MovingAnActivityKeepsItsRow()
+    public async Task PutFloorAsync_MovingAnActivitySwapsItsRow()
     {
         // Arrange
         await Save([Booking(CourtOneId), Booking(CourtTwoId)], [ItemAt(ItemId, CourtOneId)]);
-        var placed = _placements.Single();
 
-        // Act — the same activity, a different court
+        // Act — the same activity, a different court. Identity is the whole tuple now, so a
+        // move is a delete and an insert; EF orders the deletes first inside one SaveChanges.
         await Save([Booking(CourtOneId), Booking(CourtTwoId)], [ItemAt(ItemId, CourtTwoId)]);
 
-        // Assert — updated in place, so no delete races the insert on the unique index
-        _placements.Should().ContainSingle().Which.Should().BeSameAs(placed);
-        placed.CourtId.Should().Be(CourtTwoId);
+        // Assert
+        _placements.Should().ContainSingle().Which.CourtId.Should().Be(CourtTwoId);
+        _deletedPlacements.Should().ContainSingle().Which.CourtId.Should().Be(CourtOneId);
+    }
+
+    [Test]
+    public async Task PutFloorAsync_AZoneAnActivityKeeps_KeepsItsRow()
+    {
+        // Arrange
+        await Save([Booking(CourtOneId)], [ItemAt(ItemId, CourtOneId, CourtZones.Left)]);
+        var placed = _placements.Single();
+
+        // Act — the same zone rides the next save; a second zone joins it
+        await Save([Booking(CourtOneId)], [ItemAt(ItemId, CourtOneId, CourtZones.Left), ItemAt(ItemId, CourtOneId, CourtZones.Right)]);
+
+        // Assert
+        _placements.Should().HaveCount(2).And.Contain(placed);
         _deletedPlacements.Should().BeEmpty();
     }
 

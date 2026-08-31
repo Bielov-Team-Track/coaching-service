@@ -37,9 +37,10 @@ public static class CourtZones
     };
 
     /// <summary>
-    /// True when the zone is a place on a court divided this way. Null is the whole surface,
-    /// which every split keeps.
+    /// True when the zone is a place on a court at all — the whole surface, a half, or a
+    /// quarter. A placement may sit at any granularity regardless of how the court's booking
+    /// is currently divided: one drill holds the whole court, the next its halves.
     /// </summary>
-    public static bool Allows(CourtSplit split, string? zoneId) =>
-        zoneId is null || For(split).Contains(zoneId);
+    public static bool IsKnown(string? zoneId) =>
+        zoneId is null || Halves.Contains(zoneId) || Quarters.Contains(zoneId);
 }

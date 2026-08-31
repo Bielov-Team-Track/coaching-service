@@ -52,14 +52,18 @@ public class PlanItemPlacementConfiguration : IEntityTypeConfiguration<PlanItemP
         // two filters, so the floor read needs an index of its own.
         builder.HasIndex(p => new { p.PlanId, p.VenueId });
 
-        // One place per activity per venue. Filtered because exactly one anchor is ever set:
-        // without the filter every station-item row would collide on a null ItemId.
-        builder.HasIndex(p => new { p.PlanId, p.VenueId, p.ItemId })
+        // One row per activity per zone — an activity may hold several zones at once.
+        // Filtered because exactly one anchor is ever set: without the filter every
+        // station-item row would collide on a null ItemId. Nulls-not-distinct so two rows
+        // for the same whole court (ZoneId null) still collide.
+        builder.HasIndex(p => new { p.PlanId, p.VenueId, p.ItemId, p.CourtId, p.ZoneId })
             .IsUnique()
+            .AreNullsDistinct(false)
             .HasFilter("\"ItemId\" IS NOT NULL");
 
-        builder.HasIndex(p => new { p.PlanId, p.VenueId, p.StationItemId })
+        builder.HasIndex(p => new { p.PlanId, p.VenueId, p.StationItemId, p.CourtId, p.ZoneId })
             .IsUnique()
+            .AreNullsDistinct(false)
             .HasFilter("\"StationItemId\" IS NOT NULL");
 
         builder.HasOne(p => p.Plan)

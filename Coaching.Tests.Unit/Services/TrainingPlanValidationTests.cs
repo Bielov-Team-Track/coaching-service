@@ -134,7 +134,7 @@ public class TrainingPlanValidationTests : UnitTestBase
             null,
             null,
             Sections: [new CreatePlanSectionDto(new string('x', 101), 1)],
-            Items: [new CreatePlanItemDto(Guid.NewGuid(), null, 10, new string('x', 501))]);
+            Items: [new CreatePlanItemDto(Guid.NewGuid(), null, 10, new string('x', PlanItem.NotesMaxLength + 1))]);
 
         // Act
         var act = () => _sut.CreateAsync(request, _userId);
