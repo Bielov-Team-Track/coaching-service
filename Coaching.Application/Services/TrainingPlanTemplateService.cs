@@ -1781,17 +1781,14 @@ public class TrainingPlanService : ITrainingPlanService
 
     private async Task ValidatePlanEditAsync(TrainingPlan plan, Guid userId)
     {
-        // Owner, or the lead coach of the event this plan belongs to.
+        // The owner, or anyone who may run the event this plan belongs to — which now includes
+        // club staff and the unit's own coaches, not only whoever was made an admin of the event.
         if (await PlanEditPolicy.CanEditAsync(plan, userId, _eventsGrpcClient))
             return;
 
-        // Club admins/coaches can edit club plans
-        if (plan.ClubId.HasValue)
-        {
-            // TODO: Check if user is club admin/coach when club service is available
-            // For now, only owner can edit
-        }
-
+        // A club TEMPLATE, as opposed to an event's plan, is still owner-only. Its natural gate is
+        // library.manage, and wiring that wants the club id resolved here first; leaving the empty
+        // branch that used to sit here only made it look answered.
         throw new ForbiddenException("Only the plan owner or an event admin can modify this plan");
     }
 
