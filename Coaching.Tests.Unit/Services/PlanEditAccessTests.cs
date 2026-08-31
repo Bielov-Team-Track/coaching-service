@@ -1,3 +1,4 @@
+using Shared.DataAccess.Repositories.Interfaces;
 using AutoMapper;
 using Coaching.Application.DTOs.Templates;
 using Coaching.Application.Interfaces.Repositories;
@@ -8,6 +9,8 @@ using Coaching.Domain.Models.Templates;
 using FluentAssertions;
 using MassTransit;
 using Microsoft.Extensions.Logging;
+using MockQueryable;
+using MockQueryable.NSubstitute;
 using NSubstitute;
 using Shared.Exceptions;
 using Shared.Testing.Base;
@@ -57,6 +60,7 @@ public class PlanEditAccessTests : UnitTestBase
             Substitute.For<IPlanBookmarkRepository>(),
             Substitute.For<IPlanCommentRepository>(),
             Substitute.For<IDrillRepository>(),
+            EmptyDialValues(),
             Substitute.For<IClubsGrpcClient>(),
             _eventsGrpcClient,
             Substitute.For<IPlanCoachService>(),
@@ -157,5 +161,11 @@ public class PlanEditAccessTests : UnitTestBase
 
         // Assert
         _addedPlans.Should().ContainSingle().Which.Coaches.Should().BeEmpty();
+    }
+    private static IRepository<PlanItemDialValue> EmptyDialValues()
+    {
+        var repo = Substitute.For<IRepository<PlanItemDialValue>>();
+        repo.Query().Returns(_ => new List<PlanItemDialValue>().BuildMock());
+        return repo;
     }
 }

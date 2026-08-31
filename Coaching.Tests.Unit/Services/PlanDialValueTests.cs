@@ -80,6 +80,7 @@ public class PlanDialValueTests : UnitTestBase
             _dialValueRepository,
             Substitute.For<IClubsGrpcClient>(),
             Substitute.For<IEventsGrpcClient>(),
+            Substitute.For<IPlanCoachService>(),
             Substitute.For<IPublishEndpoint>(),
             _mapper,
             Substitute.For<ILogger<TrainingPlanService>>());

@@ -1,3 +1,4 @@
+using Shared.DataAccess.Repositories.Interfaces;
 using AutoMapper;
 using Coaching.Application.DTOs.Templates;
 using Coaching.Application.Interfaces.Repositories;
@@ -65,8 +66,10 @@ public class PlanCopyTests : UnitTestBase
             Substitute.For<IPlanBookmarkRepository>(),
             Substitute.For<IPlanCommentRepository>(),
             Substitute.For<IDrillRepository>(),
+            EmptyDialValues(),
             Substitute.For<IClubsGrpcClient>(),
             _eventsGrpcClient,
+            Substitute.For<IPlanCoachService>(),
             Substitute.For<IPublishEndpoint>(),
             mapper,
             Substitute.For<ILogger<TrainingPlanService>>());
@@ -294,5 +297,11 @@ public class PlanCopyTests : UnitTestBase
         stations.Stations.Should().HaveCount(2);
         stations.Stations.Sum(s => s.Items.Count).Should().Be(3);
         CopyOf(ItemKind.Break).Title.Should().Be("Water");
+    }
+    private static IRepository<PlanItemDialValue> EmptyDialValues()
+    {
+        var repo = Substitute.For<IRepository<PlanItemDialValue>>();
+        repo.Query().Returns(_ => new List<PlanItemDialValue>().BuildMock());
+        return repo;
     }
 }
