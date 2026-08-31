@@ -42,4 +42,8 @@ public class TrainingPlan : BaseEntity
     /// reuse, and who runs it is not known until there is an event to run it at.
     /// </summary>
     public virtual ICollection<PlanCoach> Coaches { get; set; } = new List<PlanCoach>();
+    /// What this plan's uses of a drill decided its dials should say. Held by the plan rather
+    /// than by the items, which a save deletes and recreates. See <see cref="PlanItemDialValue"/>.
+    /// </summary>
+    public virtual ICollection<PlanItemDialValue> DialValues { get; set; } = new List<PlanItemDialValue>();
 }

@@ -6,6 +6,8 @@ using Coaching.Domain.Models.Templates;
 using FluentAssertions;
 using MassTransit;
 using Microsoft.Extensions.Logging;
+using MockQueryable;
+using Shared.DataAccess.Repositories.Interfaces;
 using NSubstitute;
 using Shared.Messaging.Contracts.Events.Coaching;
 
@@ -32,6 +34,9 @@ public class TrainingPlanDeleteOutboxTests
         _planRepository = Substitute.For<ITrainingPlanRepository>();
         _publishEndpoint = Substitute.For<IPublishEndpoint>();
 
+        var dialValues = Substitute.For<IRepository<PlanItemDialValue>>();
+        dialValues.Query().Returns(new List<PlanItemDialValue>().BuildMock());
+
         _sut = new TrainingPlanService(
             _planRepository,
             Substitute.For<IPlanSectionRepository>(),
@@ -40,6 +45,7 @@ public class TrainingPlanDeleteOutboxTests
             Substitute.For<IPlanBookmarkRepository>(),
             Substitute.For<IPlanCommentRepository>(),
             Substitute.For<IDrillRepository>(),
+            dialValues,
             Substitute.For<IClubsGrpcClient>(),
             Substitute.For<IEventsGrpcClient>(),
             Substitute.For<IPlanCoachService>(),

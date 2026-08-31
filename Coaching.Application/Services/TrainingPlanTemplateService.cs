@@ -7,6 +7,7 @@ using Coaching.Domain.Models.Templates;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Shared.DataAccess.Repositories.Interfaces;
 using Shared.DTOs.Errors;
 using Shared.Enums;
 using Shared.Exceptions;
@@ -23,6 +24,7 @@ public class TrainingPlanService : ITrainingPlanService
     private readonly IPlanBookmarkRepository _bookmarkRepository;
     private readonly IPlanCommentRepository _commentRepository;
     private readonly IDrillRepository _drillRepository;
+    private readonly IRepository<PlanItemDialValue> _dialValueRepository;
     private readonly IClubsGrpcClient _clubsClient;
     private readonly IEventsGrpcClient _eventsGrpcClient;
     private readonly IPlanCoachService _planCoachService;
@@ -38,6 +40,7 @@ public class TrainingPlanService : ITrainingPlanService
         IPlanBookmarkRepository bookmarkRepository,
         IPlanCommentRepository commentRepository,
         IDrillRepository drillRepository,
+        IRepository<PlanItemDialValue> dialValueRepository,
         IClubsGrpcClient clubsClient,
         IEventsGrpcClient eventsGrpcClient,
         IPlanCoachService planCoachService,
@@ -52,6 +55,7 @@ public class TrainingPlanService : ITrainingPlanService
         _bookmarkRepository = bookmarkRepository;
         _commentRepository = commentRepository;
         _drillRepository = drillRepository;
+        _dialValueRepository = dialValueRepository;
         _clubsClient = clubsClient;
         _eventsGrpcClient = eventsGrpcClient;
         _planCoachService = planCoachService;
@@ -115,10 +119,13 @@ public class TrainingPlanService : ITrainingPlanService
             await ValidateItemDrillsAsync(request.Items);
 
             int order = 1;
+            var dialValues = new List<PlanItemDialValue>();
             foreach (var itemDto in request.Items)
             {
-                _itemRepository.Add(BuildItem(plan.Id, itemDto, order++));
+                _itemRepository.Add(BuildItem(plan.Id, itemDto, order++, dialValues));
             }
+            foreach (var value in dialValues)
+                _dialValueRepository.Add(value);
             await _itemRepository.SaveChangesAsync();
 
             // Recalculate total duration
@@ -128,6 +135,7 @@ public class TrainingPlanService : ITrainingPlanService
         // Re-fetch with details
         var created = await _planRepository.GetByIdWithDetailsAsync(plan.Id);
         var dto = _mapper.Map<TrainingPlanDetailDto>(created);
+        await AttachDialValuesAsync(dto);
         await EnrichWithClubInfoAsync([dto]);
         return dto;
     }
@@ -141,6 +149,7 @@ public class TrainingPlanService : ITrainingPlanService
         await ValidatePlanAccessAsync(plan, userId);
 
         var dto = _mapper.Map<TrainingPlanDetailDto>(plan);
+        await AttachDialValuesAsync(dto);
         await EnrichWithClubInfoAsync([dto]);
         await EnrichWithUserInteractionsAsync([dto], userId);
         await EnrichWithCoachNamesAsync(dto);
@@ -188,6 +197,15 @@ public class TrainingPlanService : ITrainingPlanService
                 .ToListAsync();
             foreach (var item in existingItems)
                 _itemRepository.Delete(item);
+
+            // The recorded dial values are keyed to those item ids, so they go with them. The
+            // payload brings the replacements — which is why they ride inside it.
+            var existingValues = await _dialValueRepository.Query()
+                .Where(v => v.PlanId == plan.Id)
+                .ToListAsync();
+            foreach (var value in existingValues)
+                _dialValueRepository.Delete(value);
+
             await _itemRepository.SaveChangesAsync();
 
             // Delete existing sections
@@ -222,10 +240,13 @@ public class TrainingPlanService : ITrainingPlanService
                 await ValidateItemDrillsAsync(request.Items);
 
                 int order = 1;
+                var dialValues = new List<PlanItemDialValue>();
                 foreach (var itemDto in request.Items)
                 {
-                    _itemRepository.Add(BuildItem(plan.Id, itemDto, order++));
+                    _itemRepository.Add(BuildItem(plan.Id, itemDto, order++, dialValues));
                 }
+                foreach (var value in dialValues)
+                    _dialValueRepository.Add(value);
                 await _itemRepository.SaveChangesAsync();
             }
 
@@ -235,6 +256,7 @@ public class TrainingPlanService : ITrainingPlanService
         // Re-fetch with details
         var updated = await _planRepository.GetByIdWithDetailsAsync(plan.Id);
         var dto = _mapper.Map<TrainingPlanDetailDto>(updated);
+        await AttachDialValuesAsync(dto);
         await EnrichWithClubInfoAsync([dto]);
         await EnrichWithCoachNamesAsync(dto);
 
@@ -362,10 +384,13 @@ public class TrainingPlanService : ITrainingPlanService
                 await ValidateItemDrillsAsync(request.Items);
 
                 int order = 1;
+                var dialValues = new List<PlanItemDialValue>();
                 foreach (var itemDto in request.Items)
                 {
-                    _itemRepository.Add(BuildItem(plan.Id, itemDto, order++));
+                    _itemRepository.Add(BuildItem(plan.Id, itemDto, order++, dialValues));
                 }
+                foreach (var value in dialValues)
+                    _dialValueRepository.Add(value);
                 await _itemRepository.SaveChangesAsync();
             }
         }
@@ -376,6 +401,7 @@ public class TrainingPlanService : ITrainingPlanService
         // Re-fetch with details
         var created = await _planRepository.GetByIdWithDetailsAsync(plan.Id);
         var dto = _mapper.Map<TrainingPlanDetailDto>(created);
+        await AttachDialValuesAsync(dto);
         await EnrichWithClubInfoAsync([dto]);
 
         // Publish event so events-service can update its summary
@@ -400,10 +426,13 @@ public class TrainingPlanService : ITrainingPlanService
             .Include(p => p.Sections.OrderBy(s => s.Order))
             .Include(p => p.Items.OrderBy(i => i.Order))
                 .ThenInclude(i => i.Drill)
+                    // The values the plan holds are unreadable without the definitions beside them.
+                    .ThenInclude(d => d!.Dials.OrderBy(dial => dial.Order))
             .Include(p => p.Items)
                 .ThenInclude(i => i.Stations.OrderBy(st => st.Order))
                     .ThenInclude(st => st.Items.OrderBy(r => r.Order))
                         .ThenInclude(r => r.Drill)
+                            .ThenInclude(d => d!.Dials.OrderBy(dial => dial.Order))
             .Include(p => p.Items)
                 .ThenInclude(i => i.Stations)
                     .ThenInclude(st => st.Coaches)
@@ -414,6 +443,7 @@ public class TrainingPlanService : ITrainingPlanService
         if (plan == null) return null;
 
         var dto = _mapper.Map<TrainingPlanDetailDto>(plan);
+        await AttachDialValuesAsync(dto);
         await EnrichWithClubInfoAsync([dto]);
         await EnrichWithCoachNamesAsync(dto);
         return dto;
@@ -466,6 +496,7 @@ public class TrainingPlanService : ITrainingPlanService
         // Re-fetch with details
         var created = await _planRepository.GetByIdWithDetailsAsync(template.Id);
         var dto = _mapper.Map<TrainingPlanDetailDto>(created);
+        await AttachDialValuesAsync(dto);
         await EnrichWithClubInfoAsync([dto]);
         return dto;
     }
@@ -706,9 +737,12 @@ public class TrainingPlanService : ITrainingPlanService
 
         var maxOrder = await _itemRepository.GetMaxOrderAsync(planId);
 
-        var item = BuildItem(planId, request, maxOrder + 1);
+        var dialValues = new List<PlanItemDialValue>();
+        var item = BuildItem(planId, request, maxOrder + 1, dialValues);
 
         _itemRepository.Add(item);
+        foreach (var value in dialValues)
+            _dialValueRepository.Add(value);
         await _itemRepository.SaveChangesAsync();
 
         // Recalculate total duration
@@ -778,6 +812,12 @@ public class TrainingPlanService : ITrainingPlanService
         var item = await _itemRepository.GetByIdAsync(itemId);
         if (item == null || item.TemplateId != planId)
             throw new EntityNotFoundException("Plan item not found");
+
+        var values = await _dialValueRepository.Query()
+            .Where(v => v.ItemId == itemId)
+            .ToListAsync();
+        foreach (var value in values)
+            _dialValueRepository.Delete(value);
 
         _itemRepository.Delete(item);
         await _itemRepository.SaveChangesAsync();
@@ -1115,6 +1155,12 @@ public class TrainingPlanService : ITrainingPlanService
 
         if (source.Items.Count > 0)
         {
+            // The answers the source gave its dials come with the copy: a plan saved as a
+            // template that arrived blank would make the coach set every dial again.
+            var sourceValues = await _dialValueRepository.Query()
+                .Where(v => v.PlanId == source.Id && v.ItemId != null)
+                .ToListAsync();
+
             foreach (var sourceItem in source.Items.OrderBy(i => i.Order))
             {
                 var newItem = new PlanItem
@@ -1133,6 +1179,15 @@ public class TrainingPlanService : ITrainingPlanService
                     Stations = CopyStations(sourceItem)
                 };
                 _itemRepository.Add(newItem);
+
+                foreach (var value in sourceValues.Where(v => v.ItemId == sourceItem.Id))
+                    _dialValueRepository.Add(new PlanItemDialValue
+                    {
+                        PlanId = targetPlanId,
+                        ItemId = newItem.Id,
+                        DialName = value.DialName,
+                        Value = value.Value,
+                    });
             }
             await _itemRepository.SaveChangesAsync();
         }
@@ -1255,11 +1310,12 @@ public class TrainingPlanService : ITrainingPlanService
         }
     }
 
-    private static PlanItem BuildItem(Guid planId, CreatePlanItemDto dto, int fallbackOrder)
+    private static PlanItem BuildItem(
+        Guid planId, CreatePlanItemDto dto, int fallbackOrder, ICollection<PlanItemDialValue> dialValues)
     {
         ValidateItemShapes([dto]);
 
-        return new PlanItem
+        var item = new PlanItem
         {
             TemplateId = planId,
             Kind = dto.Kind,
@@ -1271,38 +1327,123 @@ public class TrainingPlanService : ITrainingPlanService
             Notes = dto.Notes,
             Order = dto.Order ?? fallbackOrder,
             PlannedDuration = dto.Kind == ItemKind.Stations ? dto.PlannedDuration : null,
-            Stations = BuildStations(dto),
+            Stations = BuildStations(planId, dto, dialValues),
         };
+
+        CollectDialValues(planId, item.Id, inStationGroup: false, dto.DialValues, dialValues);
+        return item;
     }
 
     /// <summary>
     /// The groups of a Stations row, built with it so one SaveChangesAsync writes the block
     /// and its groups together rather than leaving a split half-stored.
     /// </summary>
-    private static List<PlanStation> BuildStations(CreatePlanItemDto dto)
+    private static List<PlanStation> BuildStations(
+        Guid planId, CreatePlanItemDto dto, ICollection<PlanItemDialValue> dialValues)
     {
         if (dto.Kind != ItemKind.Stations) return [];
 
-        return (dto.Stations ?? [])
-            .OrderBy(st => st.Order)
-            .Select((st, stationIndex) => new PlanStation
+        var stations = new List<PlanStation>();
+        var stationIndex = 0;
+
+        foreach (var stationDto in (dto.Stations ?? []).OrderBy(st => st.Order))
+        {
+            var station = new PlanStation { Name = stationDto.Name, Order = stationIndex++ };
+            var rowIndex = 0;
+
+            foreach (var row in (stationDto.Items ?? []).OrderBy(r => r.Order))
             {
-                Name = st.Name,
-                Order = stationIndex,
-                Items = (st.Items ?? [])
-                    .OrderBy(r => r.Order)
-                    .Select((row, rowIndex) => new PlanStationItem
-                    {
-                        Kind = row.Kind,
-                        DrillId = row.Kind.HasDrill() ? row.DrillId : null,
-                        Title = row.Kind.HasDrill() ? null : row.Title,
-                        Duration = row.Duration,
-                        Notes = row.Notes,
-                        Order = rowIndex,
-                    })
-                    .ToList(),
-            })
-            .ToList();
+                var built = new PlanStationItem
+                {
+                    Kind = row.Kind,
+                    DrillId = row.Kind.HasDrill() ? row.DrillId : null,
+                    Title = row.Kind.HasDrill() ? null : row.Title,
+                    Duration = row.Duration,
+                    Notes = row.Notes,
+                    Order = rowIndex++,
+                };
+
+                station.Items.Add(built);
+                CollectDialValues(planId, built.Id, inStationGroup: true, row.DialValues, dialValues);
+            }
+
+            stations.Add(station);
+        }
+
+        return stations;
+    }
+
+    /// <summary>
+    /// A use's dial values are written beside it rather than on it: saving a plan deletes and
+    /// recreates every item, so the rows hang off the plan and are rebuilt from the same
+    /// payload. A name no dial answers to is stored untouched — a dial removed from the drill
+    /// leaves its answers behind, and dropping them would lose the coach's work if it came back.
+    /// </summary>
+    private static void CollectDialValues(
+        Guid planId,
+        Guid useId,
+        bool inStationGroup,
+        Dictionary<string, string>? values,
+        ICollection<PlanItemDialValue> into)
+    {
+        if (values is null) return;
+
+        foreach (var (dialName, value) in values)
+        {
+            if (dialName.Length > PlanItemDialValue.DialNameMaxLength)
+                throw new BadRequestException(
+                    $"A dial name is longer than {PlanItemDialValue.DialNameMaxLength} characters",
+                    ErrorCodeEnum.ValidationError);
+
+            if (value?.Length > PlanItemDialValue.ValueMaxLength)
+                throw new BadRequestException(
+                    $"A dial value is longer than {PlanItemDialValue.ValueMaxLength} characters",
+                    ErrorCodeEnum.ValidationError);
+
+            into.Add(new PlanItemDialValue
+            {
+                PlanId = planId,
+                ItemId = inStationGroup ? null : useId,
+                StationItemId = inStationGroup ? useId : null,
+                DialName = dialName,
+                Value = value ?? string.Empty,
+            });
+        }
+    }
+
+    /// <summary>
+    /// Fills each row's values in after the map. They are keyed to the items by id but stored
+    /// against the plan, so one query answers for the whole plan and nothing walks per item.
+    /// </summary>
+    private async Task AttachDialValuesAsync(TrainingPlanDetailDto? plan)
+    {
+        if (plan is null) return;
+
+        var values = await _dialValueRepository.Query()
+            .Where(v => v.PlanId == plan.Id)
+            .ToListAsync();
+
+        if (values.Count == 0) return;
+
+        var byItem = values
+            .Where(v => v.ItemId.HasValue)
+            .GroupBy(v => v.ItemId!.Value)
+            .ToDictionary(g => g.Key, g => g.ToDictionary(v => v.DialName, v => v.Value));
+
+        var byStationItem = values
+            .Where(v => v.StationItemId.HasValue)
+            .GroupBy(v => v.StationItemId!.Value)
+            .ToDictionary(g => g.Key, g => g.ToDictionary(v => v.DialName, v => v.Value));
+
+        foreach (var item in plan.Items)
+        {
+            if (byItem.TryGetValue(item.Id, out var itemValues))
+                item.DialValues = itemValues;
+
+            foreach (var row in item.Stations.SelectMany(st => st.Items))
+                if (byStationItem.TryGetValue(row.Id, out var rowValues))
+                    row.DialValues = rowValues;
+        }
     }
 
     private async Task RecalculateTotalDurationAsync(Guid planId)

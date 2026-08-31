@@ -10,6 +10,7 @@ using FluentAssertions;
 using MassTransit;
 using Microsoft.Extensions.Logging;
 using MockQueryable;
+using Shared.DataAccess.Repositories.Interfaces;
 using NSubstitute;
 
 namespace Coaching.Tests.Unit.Services;
@@ -39,6 +40,9 @@ public class TrainingPlanFilterTests
                 .Select(p => new TrainingPlanDto { Id = p.Id, Name = p.Name })
                 .ToList());
 
+        var dialValues = Substitute.For<IRepository<PlanItemDialValue>>();
+        dialValues.Query().Returns(new List<PlanItemDialValue>().BuildMock());
+
         _sut = new TrainingPlanService(
             _planRepository,
             Substitute.For<IPlanSectionRepository>(),
@@ -47,6 +51,7 @@ public class TrainingPlanFilterTests
             Substitute.For<IPlanBookmarkRepository>(),
             Substitute.For<IPlanCommentRepository>(),
             Substitute.For<IDrillRepository>(),
+            dialValues,
             Substitute.For<IClubsGrpcClient>(),
             Substitute.For<IEventsGrpcClient>(),
             Substitute.For<IPlanCoachService>(),
