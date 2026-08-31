@@ -392,6 +392,8 @@ public class TrainingPlanService : ITrainingPlanService
         if (!isParticipant && !await _eventsGrpcClient.IsEventAdminAsync(eventId, userId))
             throw new ForbiddenException("You do not have access to this event's training plan");
 
+        // Mirrors GetByIdWithDetailsAsync — the same drill payload whichever way a plan is
+        // read; a field added there and not here is invisible exactly on the event pages.
         var plan = await _planRepository.Query()
             .Include(p => p.Sections.OrderBy(s => s.Order))
             .Include(p => p.Items.OrderBy(i => i.Order))
@@ -399,10 +401,18 @@ public class TrainingPlanService : ITrainingPlanService
                     // The values the plan holds are unreadable without the definitions beside them.
                     .ThenInclude(d => d!.Dials.OrderBy(dial => dial.Order))
             .Include(p => p.Items)
+                .ThenInclude(i => i.Drill)
+                    .ThenInclude(d => d!.Equipment.OrderBy(e => e.Order))
+            .Include(p => p.Items)
                 .ThenInclude(i => i.Stations.OrderBy(st => st.Order))
                     .ThenInclude(st => st.Items.OrderBy(r => r.Order))
                         .ThenInclude(r => r.Drill)
                             .ThenInclude(d => d!.Dials.OrderBy(dial => dial.Order))
+            .Include(p => p.Items)
+                .ThenInclude(i => i.Stations)
+                    .ThenInclude(st => st.Items)
+                        .ThenInclude(r => r.Drill)
+                            .ThenInclude(d => d!.Equipment.OrderBy(e => e.Order))
             .Include(p => p.Items)
                 .ThenInclude(i => i.Stations)
                     .ThenInclude(st => st.Coaches)
