@@ -108,6 +108,7 @@ public class DrillService : IDrillService
         var drills = await query
             .Include(d => d.Attachments.OrderBy(a => a.Order))
             .Include(d => d.Equipment.OrderBy(e => e.Order))
+            .Include(d => d.Dials.OrderBy(dial => dial.Order))
             .Include(d => d.Creator)
             .ToListAsync();
 

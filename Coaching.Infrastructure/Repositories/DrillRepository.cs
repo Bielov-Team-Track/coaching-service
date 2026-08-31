@@ -18,6 +18,7 @@ public class DrillRepository : BaseRepository<Drill>, IDrillRepository
             .Where(d => d.CreatedByUserId == userId)
             .Include(d => d.Attachments)
             .Include(d => d.Equipment.OrderBy(e => e.Order))
+            .Include(d => d.Dials.OrderBy(dial => dial.Order))
             .Include(d => d.Creator)
             .OrderByDescending(d => d.CreatedAt)
             .ToListAsync();
@@ -29,6 +30,7 @@ public class DrillRepository : BaseRepository<Drill>, IDrillRepository
             .Where(d => d.ClubId == clubId)
             .Include(d => d.Attachments)
             .Include(d => d.Equipment.OrderBy(e => e.Order))
+            .Include(d => d.Dials.OrderBy(dial => dial.Order))
             .Include(d => d.Creator)
             .OrderByDescending(d => d.CreatedAt)
             .ToListAsync();

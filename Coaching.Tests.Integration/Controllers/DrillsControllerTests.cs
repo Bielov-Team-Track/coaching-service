@@ -523,6 +523,30 @@ public class DrillsControllerTests
     }
 
     [Test]
+    public async Task GetDrills_ListingCarriesEachDrillsDials()
+    {
+        // Arrange — the library list feeds the plan builder's picker, whose preview and row
+        // editor both read the drill's dials; a list row without them shows raw {tokens}.
+        var source = NewDrill("Dialed drill", CreatorId, DrillVisibility.Public);
+        await SeedAsync([CreatorProfile(), source]);
+        await using (var seedScope = _factory.Services.CreateAsyncScope())
+        {
+            var seedDb = seedScope.ServiceProvider.GetRequiredService<CoachingDbContext>();
+            seedDb.DrillDials.Add(new DrillDial { DrillId = source.Id, Name = "balls", Kind = DialKind.Number, DefaultValue = "5" });
+            await seedDb.SaveChangesAsync();
+        }
+
+        // Act
+        var response = await _client.GetAsync("/v1/drills");
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var page = await response.Content.ReadFromJsonAsync<PagedResponse<DrillDto>>(JsonOptions);
+        page!.Items.Should().ContainSingle()
+            .Which.Dials.Select(d => (d.Name, d.DefaultValue)).Should().Equal(("balls", "5"));
+    }
+
+    [Test]
     public async Task LikeAndUnlike_AreIdempotentAndKeepDenormalizedCountInSync()
     {
         // Arrange
