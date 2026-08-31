@@ -40,6 +40,8 @@ public class CoachingDbContext : BaseDbContext
     public DbSet<TrainingPlanRunItem> TrainingPlanRunItems => Set<TrainingPlanRunItem>();
     public DbSet<RunStation> RunStations => Set<RunStation>();
     public DbSet<RunStationItem> RunStationItems => Set<RunStationItem>();
+    public DbSet<PlanCourtBooking> PlanCourtBookings => Set<PlanCourtBooking>();
+    public DbSet<PlanItemPlacement> PlanItemPlacements => Set<PlanItemPlacement>();
 
     // Evaluation
     public DbSet<EvaluationExercise> EvaluationExercises => Set<EvaluationExercise>();

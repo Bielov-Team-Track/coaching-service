@@ -26,6 +26,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITrainingPlanService, TrainingPlanService>();
         services.AddScoped<IPlanCoachService, PlanCoachService>();
         services.AddScoped<IRunService, RunService>();
+        services.AddScoped<IPlanFloorService, PlanFloorService>();
 
         // Evaluation services
         services.AddScoped<IEvaluationExerciseService, EvaluationExerciseService>();

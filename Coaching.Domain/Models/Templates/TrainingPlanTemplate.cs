@@ -46,4 +46,9 @@ public class TrainingPlan : BaseEntity
     /// than by the items, which a save deletes and recreates. See <see cref="PlanItemDialValue"/>.
     /// </summary>
     public virtual ICollection<PlanItemDialValue> DialValues { get; set; } = new List<PlanItemDialValue>();
+    /// <summary>The courts this session has, per venue. Only an event's plan has any.</summary>
+    public virtual ICollection<PlanCourtBooking> CourtBookings { get; set; } = new List<PlanCourtBooking>();
+
+    /// <summary>Where each activity happens, per venue. Only an event's plan has any.</summary>
+    public virtual ICollection<PlanItemPlacement> Placements { get; set; } = new List<PlanItemPlacement>();
 }
