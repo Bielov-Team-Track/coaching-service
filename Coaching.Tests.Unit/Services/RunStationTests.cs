@@ -39,6 +39,8 @@ public class RunStationTests : UnitTestBase
         _planRepository = Substitute.For<ITrainingPlanRepository>();
         _sut = new RunService(
             _runRepository,
+            Substitute.For<ITrainingPlanRunItemRepository>(),
+            Substitute.For<IRunStationRepository>(),
             _planRepository,
             Substitute.For<IRunBroadcaster>(),
             Substitute.For<IEventsGrpcClient>(),

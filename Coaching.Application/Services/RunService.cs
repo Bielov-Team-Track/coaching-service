@@ -13,6 +13,8 @@ public class RunService : IRunService
     private const int SecondsPerMinute = 60;
 
     private readonly ITrainingPlanRunRepository _runRepository;
+    private readonly ITrainingPlanRunItemRepository _runItemRepository;
+    private readonly IRunStationRepository _stationRepository;
     private readonly ITrainingPlanRepository _planRepository;
     private readonly IRunBroadcaster _broadcaster;
     private readonly IEventsGrpcClient _eventsGrpcClient;
@@ -20,12 +22,16 @@ public class RunService : IRunService
 
     public RunService(
         ITrainingPlanRunRepository runRepository,
+        ITrainingPlanRunItemRepository runItemRepository,
+        IRunStationRepository stationRepository,
         ITrainingPlanRepository planRepository,
         IRunBroadcaster broadcaster,
         IEventsGrpcClient eventsGrpcClient,
         TimeProvider timeProvider)
     {
         _runRepository = runRepository;
+        _runItemRepository = runItemRepository;
+        _stationRepository = stationRepository;
         _planRepository = planRepository;
         _broadcaster = broadcaster;
         _eventsGrpcClient = eventsGrpcClient;
@@ -114,9 +120,15 @@ public class RunService : IRunService
             // drop rows whose plan item is gone. Reusing existing rows keeps them to plain UPDATEs;
             // a blanket clear + re-add orphaned every child and made EF emit deletes that hit 0
             // rows (DbUpdateConcurrencyException).
+            //
+            // The run is tracked here, and BaseEntity assigns an Id in its constructor — so a row
+            // merely added to run.Items reads to EF as an existing row and is saved as an UPDATE
+            // matching nothing. Every add and delete below therefore also states itself against
+            // the child's own set; the collection is kept in step for the response mapping.
             var planItemIds = orderedItems.Select(i => i.Id).ToHashSet();
             foreach (var stale in run.Items.Where(ri => !planItemIds.Contains(ri.PlanItemId)).ToList())
             {
+                _runItemRepository.Delete(stale);
                 run.Items.Remove(stale);
             }
 
@@ -125,7 +137,9 @@ public class RunService : IRunService
                 var runItem = run.Items.FirstOrDefault(ri => ri.PlanItemId == item.Id);
                 if (runItem == null)
                 {
-                    run.Items.Add(NewRunItem(item));
+                    var added = NewRunItem(item);
+                    run.Items.Add(added);
+                    _runItemRepository.Add(added);
                 }
                 else
                 {
@@ -188,14 +202,21 @@ public class RunService : IRunService
     /// The run item itself is still reused, which is the point of the reconcile above: its
     /// timings belong to the run, and only the plan's shape is being re-read.
     /// </summary>
-    private static void ResnapshotStations(TrainingPlanRunItem runItem, PlanItem item)
+    private void ResnapshotStations(TrainingPlanRunItem runItem, PlanItem item)
     {
+        foreach (var existing in runItem.Stations.ToList())
+        {
+            _stationRepository.Delete(existing);
+        }
         runItem.Stations.Clear();
-        foreach (var station in SnapshotStations(item))
+
+        var replacements = SnapshotStations(item);
+        foreach (var station in replacements)
         {
             station.RunItemId = runItem.Id;
             runItem.Stations.Add(station);
         }
+        _stationRepository.AddRange(replacements);
     }
 
     public async Task<RunDto> PauseAsync(Guid eventId, Guid requestingUserId)
