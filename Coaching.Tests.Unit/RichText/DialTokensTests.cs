@@ -87,6 +87,13 @@ public class DialTokensTests
     }
 
     [Test]
+    public void IsValidName_RejectsALeadingCapitalBecauseTheWireWouldLowercaseIt()
+    {
+        // The name is a JSON object key, and the API camelCases those. See DialValueWireTests.
+        DialTokens.IsValidName("Reps").Should().BeFalse();
+    }
+
+    [Test]
     public void IsValidName_RejectsANameTooLongToStore()
     {
         DialTokens.IsValidName(new string('a', 61)).Should().BeFalse();

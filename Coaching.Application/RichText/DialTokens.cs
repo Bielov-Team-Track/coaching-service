@@ -21,7 +21,15 @@ public static class DialTokens
     /// </summary>
     private static readonly Regex Token = new(@"\{([A-Za-z][A-Za-z0-9]*)\}", RegexOptions.Compiled);
 
-    private static readonly Regex NamePattern = new(@"^[A-Za-z][A-Za-z0-9]*$", RegexOptions.Compiled);
+    /// <summary>
+    /// A name has to survive being a JSON object key. The API serializes in camelCase and its
+    /// resolver processes dictionary keys too, so a dial written as "Reps" comes back as "reps"
+    /// and the client's splice on {Reps} finds nothing. A name that already starts lowercase is
+    /// returned untouched, which is why the grammar starts there rather than at any letter.
+    /// The token scan still accepts a leading capital, so a mis-cased token in the prose is
+    /// reported as unknown instead of passing silently.
+    /// </summary>
+    private static readonly Regex NamePattern = new(@"^[a-z][A-Za-z0-9]*$", RegexOptions.Compiled);
 
     /// <summary>A dial's name has to be a token the prose can carry, and short enough to store.</summary>
     public static bool IsValidName(string? name) =>
