@@ -216,16 +216,19 @@ public class PlanItemIdentityTests : UnitTestBase
         // Arrange — the whole point of the slice: the lead coach staffed this group, and the
         // distribution must survive an edit of the practice it belongs to. Both groups come
         // back, with one of them re-timed, so nothing here is being dropped.
-        var block = SameStationsRow(SameSetters(SameSettersFirstRow(duration: 15)), SameHitters());
+        var payload = SameStationsRow(SameSetters(SameSettersFirstRow(duration: 15)), SameHitters());
 
         // Act
-        await Save([SameDrillRow(), block]);
+        await Save([SameDrillRow(), payload]);
 
-        // Assert — the row survived, so nothing wrote to its coaches
+        // Assert — read the group back off the plan rather than off the seeded object, which
+        // would still hold its coaches after being detached and rebuilt under the same id
+        var block = _plan.Items.Single(i => i.Id == _stationsRow.Id);
+        var group = block.Stations.Single(st => st.Id == _setters.Id);
+
+        group.Should().BeSameAs(_setters);
+        group.Coaches.Should().ContainSingle().Which.Should().BeSameAs(_settersCoach);
         _stationRepository.DidNotReceive().Delete(Arg.Any<PlanStation>());
-        _stationRepository.DidNotReceive().Add(Arg.Any<PlanStation>());
-        _stationsRow.Stations.Should().Contain(_setters);
-        _setters.Coaches.Should().ContainSingle().Which.Should().BeSameAs(_settersCoach);
     }
 
     [Test]
@@ -259,9 +262,9 @@ public class PlanItemIdentityTests : UnitTestBase
         // Act — only the Stations block comes back
         await Save([SameStationsRow(SameSetters(SameSettersFirstRow()))]);
 
-        // Assert
+        // Assert — and the one that did come back is still the row it was, not a copy of it
         _itemRepository.Received(1).Delete(_drillRow);
-        _plan.Items.Should().NotContain(_drillRow);
+        _plan.Items.Should().ContainSingle().Which.Should().BeSameAs(_stationsRow);
     }
 
     [Test]
