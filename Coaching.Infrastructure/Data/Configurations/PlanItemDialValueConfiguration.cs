@@ -22,9 +22,9 @@ public class PlanItemDialValueConfiguration : IEntityTypeConfiguration<PlanItemD
         // Every read of a plan's values is by plan, in one query.
         builder.HasIndex(v => v.PlanId);
 
-        // ItemId and StationItemId are deliberately plain columns, not foreign keys: a plan
-        // save deletes and recreates every item, and a key would take these rows with it.
-        // The uniqueness still has to hold per use, hence one filtered index for each side.
+        // ItemId and StationItemId are deliberately plain columns, not foreign keys: a use is a
+        // row in one of two tables, which a single key column cannot point at. The uniqueness
+        // still has to hold per use, hence one filtered index for each side.
         builder.HasIndex(v => new { v.ItemId, v.DialName })
             .IsUnique()
             .HasFilter("\"ItemId\" IS NOT NULL");

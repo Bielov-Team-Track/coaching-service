@@ -52,6 +52,8 @@ public class TrainingPlanFilterTests
             Substitute.For<IPlanCommentRepository>(),
             Substitute.For<IDrillRepository>(),
             dialValues,
+            Substitute.For<IRepository<PlanStation>>(),
+            Substitute.For<IRepository<PlanStationItem>>(),
             Substitute.For<IClubsGrpcClient>(),
             Substitute.For<IEventsGrpcClient>(),
             Substitute.For<IPlanCoachService>(),

@@ -67,6 +67,8 @@ public class PlanCopyTests : UnitTestBase
             Substitute.For<IPlanCommentRepository>(),
             Substitute.For<IDrillRepository>(),
             EmptyDialValues(),
+            Substitute.For<IRepository<PlanStation>>(),
+            Substitute.For<IRepository<PlanStationItem>>(),
             Substitute.For<IClubsGrpcClient>(),
             _eventsGrpcClient,
             Substitute.For<IPlanCoachService>(),

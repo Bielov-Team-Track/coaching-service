@@ -8,10 +8,10 @@ namespace Coaching.Domain.Models.Templates;
 /// The activity is either a row of the plan or a row inside a station group — exactly one
 /// of the two, never both and never neither.
 /// <para>
-/// The anchor is an id with no foreign key on purpose: saving a plan deletes and recreates
-/// every one of its rows, so an anchor can vanish under a placement that is still correct.
-/// A read drops those placements from the answer and leaves the rows alone, so a plan edited
-/// and then put back finds its floor where it left it.
+/// The anchor is an id with no foreign key on purpose: the activity is one of two tables, which
+/// one column cannot point at. A save keeps the id of every row it is given back, so a placement
+/// survives an edit of the plan; a row the save drops leaves its placement behind, and a read
+/// drops those from the answer rather than deleting them.
 /// </para>
 /// </summary>
 public class PlanItemPlacement : BaseEntity

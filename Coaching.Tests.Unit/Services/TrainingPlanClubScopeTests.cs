@@ -53,6 +53,8 @@ public class TrainingPlanClubScopeTests
             Substitute.For<IPlanCommentRepository>(),
             Substitute.For<IDrillRepository>(),
             dialValues,
+            Substitute.For<IRepository<PlanStation>>(),
+            Substitute.For<IRepository<PlanStationItem>>(),
             _clubsClient,
             Substitute.For<IEventsGrpcClient>(),
             Substitute.For<IPlanCoachService>(),

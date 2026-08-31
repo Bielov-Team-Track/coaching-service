@@ -46,6 +46,8 @@ public class TrainingPlanDeleteOutboxTests
             Substitute.For<IPlanCommentRepository>(),
             Substitute.For<IDrillRepository>(),
             dialValues,
+            Substitute.For<IRepository<PlanStation>>(),
+            Substitute.For<IRepository<PlanStationItem>>(),
             Substitute.For<IClubsGrpcClient>(),
             Substitute.For<IEventsGrpcClient>(),
             Substitute.For<IPlanCoachService>(),
