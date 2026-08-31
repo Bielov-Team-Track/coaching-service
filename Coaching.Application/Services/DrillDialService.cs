@@ -295,7 +295,7 @@ public class DrillDialService : IDrillDialService
     {
         if (!DialTokens.IsValidName(name))
             throw new BadRequestException(
-                $"'{name}' cannot be a dial name: it has to start with a letter and carry only letters and digits",
+                $"'{name}' cannot be a dial name: it has to start with a lower-case letter and carry only letters and digits",
                 ErrorCodeEnum.ValidationError);
     }
 
