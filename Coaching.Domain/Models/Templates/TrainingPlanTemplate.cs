@@ -36,4 +36,10 @@ public class TrainingPlan : BaseEntity
     public virtual ICollection<PlanLike> Likes { get; set; } = new List<PlanLike>();
     public virtual ICollection<PlanBookmark> Bookmarks { get; set; } = new List<PlanBookmark>();
     public virtual ICollection<PlanComment> Comments { get; set; } = new List<PlanComment>();
+
+    /// <summary>
+    /// What this plan's uses of a drill decided its dials should say. Held by the plan rather
+    /// than by the items, which a save deletes and recreates. See <see cref="PlanItemDialValue"/>.
+    /// </summary>
+    public virtual ICollection<PlanItemDialValue> DialValues { get; set; } = new List<PlanItemDialValue>();
 }

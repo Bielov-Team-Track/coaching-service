@@ -163,8 +163,8 @@ public class DrillService : IDrillService
                 throw new BadRequestException($"Variation drill(s) not found: {string.Join(", ", missingIds)}", ErrorCodeEnum.EntityNotFound);
         }
 
-        var instructions = ResolveProse(request.InstructionsHtml, request.Instructions, ordered: true);
-        var coachingPoints = ResolveProse(request.CoachingPointsHtml, request.CoachingPoints, ordered: false);
+        var instructions = DrillRichText.Resolve(request.InstructionsHtml, request.Instructions, ordered: true);
+        var coachingPoints = DrillRichText.Resolve(request.CoachingPointsHtml, request.CoachingPoints, ordered: false);
 
         var drill = new Drill
         {
@@ -304,8 +304,8 @@ public class DrillService : IDrillService
 
     private static Drill BuildImportedDrill(ImportDrillRowDto row, ImportDrillsDto request, Guid userId)
     {
-        var instructions = ResolveProse(null, row.Instructions, ordered: true);
-        var coachingPoints = ResolveProse(null, row.CoachingPoints, ordered: false);
+        var instructions = DrillRichText.Resolve(null, row.Instructions, ordered: true);
+        var coachingPoints = DrillRichText.Resolve(null, row.CoachingPoints, ordered: false);
 
         var drill = new Drill
         {
@@ -391,8 +391,8 @@ public class DrillService : IDrillService
         drill.Duration = request.Duration;
         drill.MinPlayers = request.MinPlayers;
         drill.MaxPlayers = request.MaxPlayers;
-        var instructions = ResolveProse(request.InstructionsHtml, request.Instructions, ordered: true);
-        var coachingPoints = ResolveProse(request.CoachingPointsHtml, request.CoachingPoints, ordered: false);
+        var instructions = DrillRichText.Resolve(request.InstructionsHtml, request.Instructions, ordered: true);
+        var coachingPoints = DrillRichText.Resolve(request.CoachingPointsHtml, request.CoachingPoints, ordered: false);
         drill.InstructionsHtml = instructions.Html;
         drill.Instructions = instructions.Lines;
         drill.CoachingPointsHtml = coachingPoints.Html;
@@ -498,11 +498,8 @@ public class DrillService : IDrillService
         return await _clubsClient.IsUserClubMemberAsync(userId, clubId.Value) ? clubId : null;
     }
 
-    private async Task EnsureCanManageClubDrillsAsync(Guid clubId, Guid userId)
-    {
-        if (!await _clubsClient.IsUserCoachInClubAsync(userId, clubId))
-            throw new ForbiddenException("Only club HeadCoach or above can manage club drills");
-    }
+    private Task EnsureCanManageClubDrillsAsync(Guid clubId, Guid userId) =>
+        DrillEditRules.EnsureCanManageClubDrillsAsync(clubId, userId, _clubsClient);
 
     // =========================================================================
     // LIKES
@@ -818,10 +815,7 @@ public class DrillService : IDrillService
         return dto;
     }
 
-    private bool CanModifyDrill(Drill drill, Guid userId)
-    {
-        return drill.CreatedByUserId == userId;
-    }
+    private bool CanModifyDrill(Drill drill, Guid userId) => DrillEditRules.IsCreator(drill, userId);
 
     private async Task EnrichWithUserInteractionsAsync(IEnumerable<DrillDto> drills, Guid? userId)
     {
@@ -881,21 +875,6 @@ public class DrillService : IDrillService
         {
             _logger.LogWarning(ex, "Failed to enrich drills with club info");
         }
-    }
-
-    /// <summary>
-    /// HTML is the source of truth when the client sends it; otherwise it is built
-    /// from the legacy arrays. Either way both columns are written, so every reader
-    /// sees the same content whichever shape it asks for.
-    /// </summary>
-    private static (string? Html, string[] Lines) ResolveProse(string? html, string[]? lines, bool ordered)
-    {
-        var sanitized = DrillRichText.Sanitize(html);
-        if (sanitized is not null)
-            return (sanitized, DrillRichText.ToLines(sanitized));
-
-        var fallback = lines ?? [];
-        return (DrillRichText.FromLines(fallback, ordered), fallback);
     }
 
 }

@@ -18,6 +18,7 @@ public class CoachingDbContext : BaseDbContext
     public DbSet<Drill> Drills => Set<Drill>();
     public DbSet<DrillAttachment> DrillAttachments => Set<DrillAttachment>();
     public DbSet<DrillEquipment> DrillEquipment => Set<DrillEquipment>();
+    public DbSet<DrillDial> DrillDials => Set<DrillDial>();
     public DbSet<DrillVariation> DrillVariations => Set<DrillVariation>();
     public DbSet<DrillLike> DrillLikes => Set<DrillLike>();
     public DbSet<DrillBookmark> DrillBookmarks => Set<DrillBookmark>();
@@ -29,6 +30,7 @@ public class CoachingDbContext : BaseDbContext
     public DbSet<PlanItem> PlanItems => Set<PlanItem>();
     public DbSet<PlanStation> PlanStations => Set<PlanStation>();
     public DbSet<PlanStationItem> PlanStationItems => Set<PlanStationItem>();
+    public DbSet<PlanItemDialValue> PlanItemDialValues => Set<PlanItemDialValue>();
     public DbSet<PlanLike> PlanLikes => Set<PlanLike>();
     public DbSet<PlanBookmark> PlanBookmarks => Set<PlanBookmark>();
     public DbSet<PlanComment> PlanComments => Set<PlanComment>();

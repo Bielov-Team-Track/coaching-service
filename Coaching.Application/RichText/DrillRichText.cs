@@ -61,6 +61,21 @@ public static class DrillRichText
             .ToArray();
     }
 
+    /// <summary>
+    /// The single write funnel. HTML is the source of truth when the client sends it; otherwise
+    /// it is built from the legacy arrays. Either way both columns are produced, so every reader
+    /// sees the same content whichever shape it asks for.
+    /// </summary>
+    public static (string? Html, string[] Lines) Resolve(string? html, string[]? lines, bool ordered)
+    {
+        var sanitized = Sanitize(html);
+        if (sanitized is not null)
+            return (sanitized, ToLines(sanitized));
+
+        var fallback = lines ?? [];
+        return (FromLines(fallback, ordered), fallback);
+    }
+
     /// <summary>Wraps legacy plain lines as list HTML, for backfilling rows written before the editor.</summary>
     public static string? FromLines(IReadOnlyCollection<string> lines, bool ordered)
     {
