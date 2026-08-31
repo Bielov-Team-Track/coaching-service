@@ -25,6 +25,7 @@ public class TrainingPlanService : ITrainingPlanService
     private readonly IDrillRepository _drillRepository;
     private readonly IClubsGrpcClient _clubsClient;
     private readonly IEventsGrpcClient _eventsGrpcClient;
+    private readonly IPlanCoachService _planCoachService;
     private readonly IPublishEndpoint _publishEndpoint;
     private readonly IMapper _mapper;
     private readonly ILogger<TrainingPlanService> _logger;
@@ -39,6 +40,7 @@ public class TrainingPlanService : ITrainingPlanService
         IDrillRepository drillRepository,
         IClubsGrpcClient clubsClient,
         IEventsGrpcClient eventsGrpcClient,
+        IPlanCoachService planCoachService,
         IPublishEndpoint publishEndpoint,
         IMapper mapper,
         ILogger<TrainingPlanService> logger)
@@ -52,6 +54,7 @@ public class TrainingPlanService : ITrainingPlanService
         _drillRepository = drillRepository;
         _clubsClient = clubsClient;
         _eventsGrpcClient = eventsGrpcClient;
+        _planCoachService = planCoachService;
         _publishEndpoint = publishEndpoint;
         _mapper = mapper;
         _logger = logger;
@@ -140,6 +143,7 @@ public class TrainingPlanService : ITrainingPlanService
         var dto = _mapper.Map<TrainingPlanDetailDto>(plan);
         await EnrichWithClubInfoAsync([dto]);
         await EnrichWithUserInteractionsAsync([dto], userId);
+        await EnrichWithCoachNamesAsync(dto);
         return dto;
     }
 
@@ -232,6 +236,7 @@ public class TrainingPlanService : ITrainingPlanService
         var updated = await _planRepository.GetByIdWithDetailsAsync(plan.Id);
         var dto = _mapper.Map<TrainingPlanDetailDto>(updated);
         await EnrichWithClubInfoAsync([dto]);
+        await EnrichWithCoachNamesAsync(dto);
 
         // Publish event for Instance plans so events-service can update its summary
         if (updated != null && updated.PlanType == PlanType.Instance)
@@ -399,6 +404,10 @@ public class TrainingPlanService : ITrainingPlanService
                 .ThenInclude(i => i.Stations.OrderBy(st => st.Order))
                     .ThenInclude(st => st.Items.OrderBy(r => r.Order))
                         .ThenInclude(r => r.Drill)
+            .Include(p => p.Items)
+                .ThenInclude(i => i.Stations)
+                    .ThenInclude(st => st.Coaches)
+            .Include(p => p.Coaches)
             .Include(p => p.Creator)
             .FirstOrDefaultAsync(p => p.EventId == eventId && p.PlanType == PlanType.Instance && !p.IsDeleted);
 
@@ -406,6 +415,7 @@ public class TrainingPlanService : ITrainingPlanService
 
         var dto = _mapper.Map<TrainingPlanDetailDto>(plan);
         await EnrichWithClubInfoAsync([dto]);
+        await EnrichWithCoachNamesAsync(dto);
         return dto;
     }
 
@@ -1368,8 +1378,8 @@ public class TrainingPlanService : ITrainingPlanService
 
     private async Task ValidatePlanEditAsync(TrainingPlan plan, Guid userId)
     {
-        // Owner can always edit
-        if (plan.CreatedByUserId == userId)
+        // Owner, or the lead coach of the event this plan belongs to.
+        if (await PlanEditPolicy.CanEditAsync(plan, userId, _eventsGrpcClient))
             return;
 
         // Club admins/coaches can edit club plans
@@ -1379,7 +1389,7 @@ public class TrainingPlanService : ITrainingPlanService
             // For now, only owner can edit
         }
 
-        throw new ForbiddenException("Only the plan owner can modify this plan");
+        throw new ForbiddenException("Only the plan owner or an event admin can modify this plan");
     }
 
     private async Task<(IEnumerable<TrainingPlan> items, int totalCount)> ApplyFiltersAndPaginationAsync(
@@ -1482,6 +1492,19 @@ public class TrainingPlanService : ITrainingPlanService
             plan.IsLiked = likedSet.Contains(plan.Id);
             plan.IsBookmarked = bookmarkedSet.Contains(plan.Id);
         }
+    }
+
+    /// <summary>
+    /// Puts names to the plan's coaches — its own and every station's — in a single lookup, so
+    /// a practice split into ten groups still costs one query rather than eleven.
+    /// </summary>
+    private async Task EnrichWithCoachNamesAsync(TrainingPlanDetailDto plan)
+    {
+        var coaches = plan.Coaches
+            .Concat(plan.Items.SelectMany(i => i.Stations).SelectMany(st => st.Coaches))
+            .ToList();
+
+        await _planCoachService.ResolveNamesAsync(coaches);
     }
 
     private async Task EnrichWithClubInfoAsync(IEnumerable<TrainingPlanDto> plans)

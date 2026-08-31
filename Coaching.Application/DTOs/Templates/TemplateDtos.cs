@@ -14,6 +14,21 @@ public class PlanAuthorDto
     public string? AvatarUrl { get; set; }
 }
 
+/// <summary>
+/// A coach assigned to an event's plan or to one of its stations. Named fields match
+/// <see cref="PlanAuthorDto"/> and <see cref="UserProfileDto"/> so a client has one shape
+/// for "a person" across this API; the name is resolved from the local profile replica and
+/// stays null for a coach whose profile has not replicated yet.
+/// </summary>
+public class PlanCoachDto
+{
+    public Guid UserId { get; set; }
+    public string? FirstName { get; set; }
+    public string? LastName { get; set; }
+    public string? AvatarUrl { get; set; }
+    public string? ImageThumbHash { get; set; }
+}
+
 // Response DTOs
 public class TrainingPlanDto
 {
@@ -50,6 +65,9 @@ public class TrainingPlanDetailDto : TrainingPlanDto
 {
     public List<PlanSectionDto> Sections { get; set; } = new();
     public List<PlanItemDto> Items { get; set; } = new();
+
+    /// <summary>Event plans only: the coaches working the practice. Empty on a template.</summary>
+    public List<PlanCoachDto> Coaches { get; set; } = new();
 }
 
 public class PlanSectionDto
@@ -90,6 +108,9 @@ public class PlanStationDto
     public required string Name { get; set; }
     public int Order { get; set; }
     public List<PlanStationItemDto> Items { get; set; } = new();
+
+    /// <summary>The coaches running this group.</summary>
+    public List<PlanCoachDto> Coaches { get; set; } = new();
 }
 
 public class PlanStationItemDto
@@ -176,6 +197,14 @@ public record UpdatePlanItemDto(
 
 public record ReorderPlanItemsDto(
     List<Guid> ItemIds
+);
+
+/// <summary>
+/// Replaces a coach set outright: whoever is named here is assigned afterwards, and whoever
+/// is not is unassigned. An empty list clears the set.
+/// </summary>
+public record AssignCoachesDto(
+    List<Guid>? UserIds
 );
 
 // List/Filter DTOs

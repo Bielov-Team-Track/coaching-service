@@ -235,6 +235,42 @@ public class RunServiceTests : UnitTestBase
     }
 
     [Test]
+    public async Task PauseAsync_EventAdminWhoDidNotCreateThePlan_MayControlTheRun()
+    {
+        // Arrange — the lead coach of the event runs the session from the floor; the plan may
+        // have been built by someone else entirely.
+        var plan = BuildPlan();
+        StubPlanQuery(plan);
+        var run = RunningRunOnFirstItem(startedSecondsAgo: 0);
+        StubExistingRun(run);
+        _eventsGrpcClient.IsEventAdminAsync(EventId, OtherUserId).Returns(true);
+        AdvanceTime(TimeSpan.FromSeconds(30));
+
+        // Act
+        var result = await _sut.PauseAsync(EventId, OtherUserId);
+
+        // Assert
+        result.Status.Should().Be(RunStatus.Paused);
+        result.CurrentItemPausedElapsedSeconds.Should().Be(30);
+    }
+
+    [Test]
+    public async Task PauseAsync_NeitherCreatorNorEventAdmin_ThrowsForbidden()
+    {
+        // Arrange
+        var plan = BuildPlan();
+        StubPlanQuery(plan);
+        StubExistingRun(RunningRunOnFirstItem(startedSecondsAgo: 0));
+        _eventsGrpcClient.IsEventAdminAsync(EventId, OtherUserId).Returns(false);
+
+        // Act
+        var act = () => _sut.PauseAsync(EventId, OtherUserId);
+
+        // Assert
+        await act.Should().ThrowAsync<ForbiddenException>();
+    }
+
+    [Test]
     public async Task ResumeAsync_ReanchorsVirtualStartFromPausedElapsed()
     {
         // Arrange

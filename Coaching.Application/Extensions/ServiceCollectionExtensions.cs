@@ -23,6 +23,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<Shared.Services.IGuardianAuthorizer, Shared.Services.GuardianAuthorizer>();
         services.AddScoped<IDrillService, DrillService>();
         services.AddScoped<ITrainingPlanService, TrainingPlanService>();
+        services.AddScoped<IPlanCoachService, PlanCoachService>();
         services.AddScoped<IRunService, RunService>();
 
         // Evaluation services

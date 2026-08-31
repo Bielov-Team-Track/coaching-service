@@ -49,6 +49,7 @@ public class TrainingPlanFilterTests
             Substitute.For<IDrillRepository>(),
             Substitute.For<IClubsGrpcClient>(),
             Substitute.For<IEventsGrpcClient>(),
+            Substitute.For<IPlanCoachService>(),
             Substitute.For<IPublishEndpoint>(),
             mapper,
             Substitute.For<ILogger<TrainingPlanService>>());

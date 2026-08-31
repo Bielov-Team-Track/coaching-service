@@ -12,13 +12,16 @@ namespace Coaching.Controllers.V1;
 public class PlansController : Shared.Microservices.Controllers.BaseApiController
 {
     private readonly ITrainingPlanService _planService;
+    private readonly IPlanCoachService _planCoachService;
 
     public PlansController(
         ITrainingPlanService planService,
+        IPlanCoachService planCoachService,
         IJwtPayloadProvider jwtPayloadProvider)
         : base(jwtPayloadProvider)
     {
         _planService = planService;
+        _planCoachService = planCoachService;
     }
 
     #region CRUD
@@ -193,6 +196,26 @@ public class PlansController : Shared.Microservices.Controllers.BaseApiControlle
         CheckIsUserLoggedIn();
         await _planService.ReorderItemsAsync(id, request, JwtPayload.UserId);
         return Ok();
+    }
+
+    #endregion
+
+    #region Coaches
+
+    [HttpPut("plans/{id:guid}/coaches")]
+    public async Task<IActionResult> AssignPlanCoaches([FromRoute] Guid id, [FromBody] AssignCoachesDto request)
+    {
+        CheckIsUserLoggedIn();
+        var coaches = await _planCoachService.ReplacePlanCoachesAsync(id, request, JwtPayload.UserId);
+        return Ok(coaches);
+    }
+
+    [HttpPut("plans/{id:guid}/stations/{stationId:guid}/coaches")]
+    public async Task<IActionResult> AssignStationCoaches([FromRoute] Guid id, [FromRoute] Guid stationId, [FromBody] AssignCoachesDto request)
+    {
+        CheckIsUserLoggedIn();
+        var coaches = await _planCoachService.ReplaceStationCoachesAsync(id, stationId, request, JwtPayload.UserId);
+        return Ok(coaches);
     }
 
     #endregion

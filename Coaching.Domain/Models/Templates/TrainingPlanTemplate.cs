@@ -36,4 +36,10 @@ public class TrainingPlan : BaseEntity
     public virtual ICollection<PlanLike> Likes { get; set; } = new List<PlanLike>();
     public virtual ICollection<PlanBookmark> Bookmarks { get; set; } = new List<PlanBookmark>();
     public virtual ICollection<PlanComment> Comments { get; set; } = new List<PlanComment>();
+
+    /// <summary>
+    /// The coaches working this plan. Only an event's plan has them: a template is a shape to
+    /// reuse, and who runs it is not known until there is an event to run it at.
+    /// </summary>
+    public virtual ICollection<PlanCoach> Coaches { get; set; } = new List<PlanCoach>();
 }

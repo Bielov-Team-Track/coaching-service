@@ -42,6 +42,7 @@ public class TrainingPlanDeleteOutboxTests
             Substitute.For<IDrillRepository>(),
             Substitute.For<IClubsGrpcClient>(),
             Substitute.For<IEventsGrpcClient>(),
+            Substitute.For<IPlanCoachService>(),
             _publishEndpoint,
             Substitute.For<AutoMapper.IMapper>(),
             Substitute.For<ILogger<TrainingPlanService>>());

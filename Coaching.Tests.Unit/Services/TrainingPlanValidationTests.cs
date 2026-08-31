@@ -46,6 +46,7 @@ public class TrainingPlanValidationTests : UnitTestBase
             _drillRepository,
             Substitute.For<IClubsGrpcClient>(),
             Substitute.For<IEventsGrpcClient>(),
+            Substitute.For<IPlanCoachService>(),
             Substitute.For<IPublishEndpoint>(),
             _mapper,
             Substitute.For<ILogger<TrainingPlanService>>());
