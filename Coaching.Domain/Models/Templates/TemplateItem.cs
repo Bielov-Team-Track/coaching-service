@@ -6,7 +6,7 @@ namespace Coaching.Domain.Models.Templates;
 
 public class PlanItem : BaseEntity
 {
-    public const int NotesMaxLength = 500;
+    public const int NotesMaxLength = 2000;
     public const int TitleMaxLength = 200;
 
     public Guid TemplateId { get; set; }
