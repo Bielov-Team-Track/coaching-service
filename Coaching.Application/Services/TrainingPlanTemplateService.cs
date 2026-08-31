@@ -2,6 +2,7 @@ using AutoMapper;
 using Coaching.Application.DTOs.Templates;
 using Coaching.Application.Interfaces.Repositories;
 using Coaching.Application.Interfaces.Services;
+using Coaching.Application.RichText;
 using Coaching.Domain.Enums;
 using Coaching.Domain.Models.Templates;
 using MassTransit;
@@ -1390,9 +1391,12 @@ public class TrainingPlanService : ITrainingPlanService
 
         foreach (var (dialName, value) in values)
         {
-            if (dialName.Length > PlanItemDialValue.DialNameMaxLength)
+            // The name a dial no longer goes by is still a name; one that was never a dial name
+            // is a client bug, and storing it would put a key on the wire that comes back
+            // changed. See DialTokens.
+            if (!DialTokens.IsValidName(dialName))
                 throw new BadRequestException(
-                    $"A dial name is longer than {PlanItemDialValue.DialNameMaxLength} characters",
+                    $"'{dialName}' is not a dial name",
                     ErrorCodeEnum.ValidationError);
 
             if (value?.Length > PlanItemDialValue.ValueMaxLength)
