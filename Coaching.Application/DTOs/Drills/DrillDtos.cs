@@ -138,6 +138,12 @@ public class DrillDto
     public string[] CoachingPoints { get; set; } = [];
     public ICollection<DrillEquipmentDto> Equipment { get; set; } = new List<DrillEquipmentDto>();
 
+    /// <summary>
+    /// The words of the instructions a coach may set per use, in the order they were promoted.
+    /// Carried by the drill detail and by a plan's drills; the list endpoints leave it empty.
+    /// </summary>
+    public ICollection<DrillDialDto> Dials { get; set; } = new List<DrillDialDto>();
+
     public string? VideoUrl { get; set; }
 
     public Guid CreatedByUserId { get; set; }
@@ -193,7 +199,8 @@ public record CreateDrillDto(
     string? VideoUrl,
     Guid? ClubId,
     string? InstructionsHtml = null,
-    string? CoachingPointsHtml = null
+    string? CoachingPointsHtml = null,
+    List<DrillDialInputDto>? Dials = null
 );
 
 public record UpdateDrillDto(
@@ -214,7 +221,8 @@ public record UpdateDrillDto(
     string? VideoUrl,
     Guid? ClubId,
     string? InstructionsHtml = null,
-    string? CoachingPointsHtml = null
+    string? CoachingPointsHtml = null,
+    List<DrillDialInputDto>? Dials = null
 );
 
 public class DrillFilterRequest

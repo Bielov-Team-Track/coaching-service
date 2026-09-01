@@ -11,13 +11,16 @@ namespace Coaching.Controllers.V1;
 public class DrillsController : Shared.Microservices.Controllers.BaseApiController
 {
     private readonly IDrillService _drillService;
+    private readonly IDrillDialService _dialService;
 
     public DrillsController(
         IDrillService drillService,
+        IDrillDialService dialService,
         IJwtPayloadProvider jwtPayloadProvider)
         : base(jwtPayloadProvider)
     {
         _drillService = drillService;
+        _dialService = dialService;
     }
 
     /// <summary>
@@ -58,6 +61,17 @@ public class DrillsController : Shared.Microservices.Controllers.BaseApiControll
         CheckIsUserLoggedIn();
         var created = await _drillService.CreateAsync(request, JwtPayload.UserId);
         return CreatedAtAction(nameof(GetById), new { id = created.Id, version = "1.0" }, created);
+    }
+
+    /// <summary>
+    /// Create many drills at once from a parsed spreadsheet.
+    /// </summary>
+    [HttpPost("drills/import")]
+    public async Task<IActionResult> Import([FromBody] ImportDrillsDto request)
+    {
+        CheckIsUserLoggedIn();
+        var result = await _drillService.ImportAsync(request, JwtPayload.UserId);
+        return Ok(result);
     }
 
     /// <summary>
@@ -106,6 +120,59 @@ public class DrillsController : Shared.Microservices.Controllers.BaseApiControll
         CheckIsUserLoggedIn();
         var drills = await _drillService.GetClubDrillsAsync(clubId, JwtPayload.UserId);
         return Ok(drills);
+    }
+
+    // =========================================================================
+    // DIALS
+    // =========================================================================
+
+    /// <summary>
+    /// Promote a word of the instructions to a dial. The body carries the prose the client has
+    /// already spliced the token into; the whole drill comes back with the dial on it.
+    /// </summary>
+    [HttpPost("drills/{drillId:guid}/dials")]
+    public async Task<IActionResult> AddDial([FromRoute] Guid drillId, [FromBody] CreateDrillDialDto request)
+    {
+        CheckIsUserLoggedIn();
+        var drill = await _dialService.AddAsync(drillId, request, JwtPayload.UserId);
+        return Ok(drill);
+    }
+
+    /// <summary>
+    /// Change a dial. A rename rewrites every value recorded against the old name, so it has to
+    /// bring the re-tokenized instructions with it.
+    /// </summary>
+    [HttpPatch("drills/{drillId:guid}/dials/{name}")]
+    public async Task<IActionResult> UpdateDial(
+        [FromRoute] Guid drillId, [FromRoute] string name, [FromBody] UpdateDrillDialDto request)
+    {
+        CheckIsUserLoggedIn();
+        var drill = await _dialService.UpdateAsync(drillId, name, request, JwtPayload.UserId);
+        return Ok(drill);
+    }
+
+    /// <summary>
+    /// Remove a dial, with the instructions the client has already put its words back into.
+    /// </summary>
+    [HttpDelete("drills/{drillId:guid}/dials/{name}")]
+    public async Task<IActionResult> DeleteDial(
+        [FromRoute] Guid drillId, [FromRoute] string name, [FromBody] DeleteDrillDialDto request)
+    {
+        CheckIsUserLoggedIn();
+        var drill = await _dialService.DeleteAsync(drillId, name, request, JwtPayload.UserId);
+        return Ok(drill);
+    }
+
+    /// <summary>
+    /// Fold a duplicate drill into this one: every plan that used it now uses this drill, reading
+    /// it through the dial values supplied here, and the duplicate goes.
+    /// </summary>
+    [HttpPost("drills/{drillId:guid}/fold")]
+    public async Task<IActionResult> Fold([FromRoute] Guid drillId, [FromBody] FoldDrillDto request)
+    {
+        CheckIsUserLoggedIn();
+        var result = await _dialService.FoldAsync(drillId, request, JwtPayload.UserId);
+        return Ok(result);
     }
 
     // =========================================================================

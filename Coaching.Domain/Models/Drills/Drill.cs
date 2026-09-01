@@ -5,6 +5,9 @@ namespace Coaching.Domain.Models.Drills;
 
 public class Drill : BaseEntity
 {
+    public const int NameMaxLength = 200;
+    public const int VideoUrlMaxLength = 500;
+
     public required string Name { get; set; }
     public string? Description { get; set; }
 
@@ -31,6 +34,12 @@ public class Drill : BaseEntity
 
     // Navigation properties
     public virtual ICollection<DrillEquipment> Equipment { get; set; } = new List<DrillEquipment>();
+
+    /// <summary>
+    /// The words of the instructions a coach may set per use. The drill owns the dials; each
+    /// use of the drill owns the values. See <see cref="DrillDial"/>.
+    /// </summary>
+    public virtual ICollection<DrillDial> Dials { get; set; } = new List<DrillDial>();
 
     // Video preview URL (YouTube, Vimeo, etc.)
     public string? VideoUrl { get; set; }

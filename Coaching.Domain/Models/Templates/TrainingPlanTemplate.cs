@@ -21,6 +21,12 @@ public class TrainingPlan : BaseEntity
 
     // Denormalized aggregates
     public int TotalDuration { get; set; }
+
+    /// <summary>
+    /// Total minus breaks and meetings. Kept beside TotalDuration because a coach budgets
+    /// against both: the slot the gym is booked for, and the time actually spent coaching.
+    /// </summary>
+    public int CoachedDuration { get; set; }
     public int LikeCount { get; set; }
     public int UsageCount { get; set; }
 
@@ -30,4 +36,19 @@ public class TrainingPlan : BaseEntity
     public virtual ICollection<PlanLike> Likes { get; set; } = new List<PlanLike>();
     public virtual ICollection<PlanBookmark> Bookmarks { get; set; } = new List<PlanBookmark>();
     public virtual ICollection<PlanComment> Comments { get; set; } = new List<PlanComment>();
+
+    /// <summary>
+    /// The coaches working this plan. Only an event's plan has them: a template is a shape to
+    /// reuse, and who runs it is not known until there is an event to run it at.
+    /// </summary>
+    public virtual ICollection<PlanCoach> Coaches { get; set; } = new List<PlanCoach>();
+    /// What this plan's uses of a drill decided its dials should say. Held by the plan rather
+    /// than by the items, which a save deletes and recreates. See <see cref="PlanItemDialValue"/>.
+    /// </summary>
+    public virtual ICollection<PlanItemDialValue> DialValues { get; set; } = new List<PlanItemDialValue>();
+    /// <summary>The courts this session has, per venue. Only an event's plan has any.</summary>
+    public virtual ICollection<PlanCourtBooking> CourtBookings { get; set; } = new List<PlanCourtBooking>();
+
+    /// <summary>Where each activity happens, per venue. Only an event's plan has any.</summary>
+    public virtual ICollection<PlanItemPlacement> Placements { get; set; } = new List<PlanItemPlacement>();
 }

@@ -10,6 +10,7 @@ public interface IDrillService
     Task<DrillDto?> GetByIdAsync(Guid id, Guid? userId = null);
     Task<DrillDto> CreateAsync(CreateDrillDto request, Guid userId);
     Task<DrillDto> UpdateAsync(UpdateDrillDto request, Guid userId);
+    Task<ImportDrillsResultDto> ImportAsync(ImportDrillsDto request, Guid userId);
     Task DeleteAsync(Guid id, Guid userId);
 
     // User's drills

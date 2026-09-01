@@ -1,3 +1,4 @@
+using Coaching.Domain.Enums;
 using AutoMapper;
 using Coaching.Application.DTOs.Drills;
 using Coaching.Application.DTOs.Templates;
@@ -77,9 +78,38 @@ public class PlanMappingProfile : Profile
             .ForMember(d => d.Plan, opt => opt.Ignore())
             .ForMember(d => d.Items, opt => opt.Ignore());
 
-        // Item mappings - Drill is local, map it directly
+        // Item mappings - Drill is local, map it directly. IsCoached is resolved here so no
+        // client has to re-derive it and get a different answer.
+        // The values are not on the item — they hang off the plan, keyed to it — so the plan
+        // read fills them in after the map rather than AutoMapper reaching for a member that
+        // is deliberately not there.
         CreateMap<PlanItem, PlanItemDto>()
-            .ForMember(d => d.Drill, opt => opt.MapFrom(s => s.Drill));
+            .ForMember(d => d.Drill, opt => opt.MapFrom(s => s.Drill))
+            .ForMember(d => d.IsCoached, opt => opt.MapFrom(s => s.Kind.IsCoached()))
+            .ForMember(d => d.DialValues, opt => opt.Ignore())
+            .ForMember(d => d.Stations, opt => opt.MapFrom(s => s.Stations.OrderBy(st => st.Order)));
+
+        CreateMap<PlanStation, PlanStationDto>()
+            .ForMember(d => d.Items, opt => opt.MapFrom(s => s.Items.OrderBy(i => i.Order)));
+
+        // A coach row carries only the user id; the name behind it lives in the profile replica
+        // and is filled in afterwards, once, for every coach on the plan at the same time.
+        CreateMap<PlanCoach, PlanCoachDto>()
+            .ForMember(d => d.FirstName, opt => opt.Ignore())
+            .ForMember(d => d.LastName, opt => opt.Ignore())
+            .ForMember(d => d.AvatarUrl, opt => opt.Ignore())
+            .ForMember(d => d.ImageThumbHash, opt => opt.Ignore());
+
+        CreateMap<PlanStationCoach, PlanCoachDto>()
+            .ForMember(d => d.FirstName, opt => opt.Ignore())
+            .ForMember(d => d.LastName, opt => opt.Ignore())
+            .ForMember(d => d.AvatarUrl, opt => opt.Ignore())
+            .ForMember(d => d.ImageThumbHash, opt => opt.Ignore());
+
+        CreateMap<PlanStationItem, PlanStationItemDto>()
+            .ForMember(d => d.Drill, opt => opt.MapFrom(s => s.Drill))
+            .ForMember(d => d.IsCoached, opt => opt.MapFrom(s => s.Kind.IsCoached()))
+            .ForMember(d => d.DialValues, opt => opt.Ignore());
 
         CreateMap<CreatePlanItemDto, PlanItem>()
             .ForMember(d => d.Id, opt => opt.Ignore())
@@ -87,6 +117,7 @@ public class PlanMappingProfile : Profile
             .ForMember(d => d.Plan, opt => opt.Ignore())
             .ForMember(d => d.Section, opt => opt.Ignore())
             .ForMember(d => d.Drill, opt => opt.Ignore())
+            .ForMember(d => d.Stations, opt => opt.Ignore())
             .ForMember(d => d.Order, opt => opt.Ignore());
 
         // Comment mappings

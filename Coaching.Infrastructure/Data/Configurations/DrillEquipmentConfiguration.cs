@@ -12,7 +12,7 @@ public class DrillEquipmentConfiguration : IEntityTypeConfiguration<DrillEquipme
 
         builder.Property(e => e.Name)
             .IsRequired()
-            .HasMaxLength(200);
+            .HasMaxLength(DrillEquipment.NameMaxLength);
 
         builder.Property(e => e.IsOptional)
             .HasDefaultValue(false);

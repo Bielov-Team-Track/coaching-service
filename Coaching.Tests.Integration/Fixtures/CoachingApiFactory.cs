@@ -1,16 +1,15 @@
-using System.Text;
 using Coaching.Application.Interfaces.Services;
 using Coaching.Infrastructure.Data.Context;
 using MassTransit;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.IdentityModel.Tokens;
 using NSubstitute;
+using Shared.Services.FileStorage.Intefaces;
 using Shared.Services;
 using Shared.Testing.Fixtures;
 
@@ -28,6 +27,7 @@ public class CoachingApiFactory : WebApplicationFactory<Program>
     public IEventsGrpcClient EventsGrpcClient { get; private set; } = null!;
     public IClubsGrpcClient ClubsGrpcClient { get; private set; } = null!;
     public IRunBroadcaster RunBroadcaster { get; private set; } = null!;
+    public IFileService FileService { get; private set; } = null!;
 
     /// <summary>
     /// Only consulted on requests carrying an X-Acting-As header, by the shared authorizer behind
@@ -44,12 +44,29 @@ public class CoachingApiFactory : WebApplicationFactory<Program>
         EventsGrpcClient = Substitute.For<IEventsGrpcClient>();
         ClubsGrpcClient = Substitute.For<IClubsGrpcClient>();
         RunBroadcaster = Substitute.For<IRunBroadcaster>();
+        FileService = Substitute.For<IFileService>();
         GuardianCacheService = Substitute.For<IGuardianCacheService>();
         GuardianAccessSource = Substitute.For<IGuardianAccessSource>();
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
+        // Settings that come from the environment in a real deployment and so are absent from a
+        // test host. The tokens the tests sign must be validated with the same key the host
+        // reads, and the S3 options are validated the moment they are resolved — without
+        // either, endpoints failed before their own code ran. Mirrors EventsApiFactory.
+        builder.ConfigureAppConfiguration(config =>
+            config.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Jwt:Secret"] = JwtSecret,
+                ["Jwt:Issuer"] = JwtIssuer,
+                ["Jwt:Audience"] = JwtAudience,
+                ["Jwt:ExpiryMinutes"] = "60",
+                ["S3:Bucket"] = "test-bucket",
+                ["S3:PublicBaseUrl"] = "https://cdn.test",
+                ["S3:PresignedUrlExpiryMinutes"] = "15",
+            }));
+
         builder.ConfigureServices(services =>
         {
             var dbDescriptor = services.SingleOrDefault(d =>
@@ -63,6 +80,7 @@ public class CoachingApiFactory : WebApplicationFactory<Program>
             ReplaceWithSingleton(services, EventsGrpcClient);
             ReplaceWithSingleton(services, ClubsGrpcClient);
             ReplaceWithSingleton(services, RunBroadcaster);
+            ReplaceWithSingleton(services, FileService);
             ReplaceWithSingleton(services, GuardianCacheService);
             ReplaceWithSingleton(services, GuardianAccessSource);
 
@@ -85,29 +103,15 @@ public class CoachingApiFactory : WebApplicationFactory<Program>
                 services.Remove(d);
             services.AddDistributedMemoryCache();
 
-            services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-                .AddJwtBearer(options =>
-                {
-                    options.TokenValidationParameters = new TokenValidationParameters
-                    {
-                        ValidateIssuerSigningKey = true,
-                        IssuerSigningKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(JwtSecret)),
-                        ValidateIssuer = true,
-                        ValidIssuer = JwtIssuer,
-                        ValidateAudience = true,
-                        ValidAudience = JwtAudience,
-                        ValidateLifetime = true,
-                        ClockSkew = TimeSpan.Zero
-                    };
-                });
-
             var sp = services.BuildServiceProvider();
             using var scope = sp.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<CoachingDbContext>();
             db.Database.Migrate();
         });
 
-        builder.UseEnvironment("Testing");
+        // Development settings provide deterministic JWT configuration and detailed error
+        // responses. External infrastructure remains isolated by the replacements above.
+        builder.UseEnvironment("Development");
     }
 
     private static void ReplaceWithSingleton<T>(IServiceCollection services, T instance) where T : class

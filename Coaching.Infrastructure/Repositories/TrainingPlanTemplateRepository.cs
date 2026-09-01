@@ -17,6 +17,29 @@ public class TrainingPlanRepository : BaseRepository<TrainingPlan>, ITrainingPla
             .Include(t => t.Sections.OrderBy(s => s.Order))
             .Include(t => t.Items.OrderBy(i => i.Order))
                 .ThenInclude(i => i.Drill)
+                    // Without the definitions the values the plan holds are unreadable: the
+                    // client needs to know a dial is a Number before it can draw "6 reps".
+                    .ThenInclude(d => d!.Dials.OrderBy(dial => dial.Order))
+            // Equipment rides too: the floor plan lists what to carry to each court.
+            .Include(t => t.Items)
+                .ThenInclude(i => i.Drill)
+                    .ThenInclude(d => d!.Equipment.OrderBy(e => e.Order))
+            // A Stations row is nothing without its groups: loading the row alone is what
+            // made a saved split come back empty.
+            .Include(t => t.Items)
+                .ThenInclude(i => i.Stations.OrderBy(st => st.Order))
+                    .ThenInclude(st => st.Items.OrderBy(r => r.Order))
+                        .ThenInclude(r => r.Drill)
+                            .ThenInclude(d => d!.Dials.OrderBy(dial => dial.Order))
+            .Include(t => t.Items)
+                .ThenInclude(i => i.Stations)
+                    .ThenInclude(st => st.Items)
+                        .ThenInclude(r => r.Drill)
+                            .ThenInclude(d => d!.Equipment.OrderBy(e => e.Order))
+            .Include(t => t.Items)
+                .ThenInclude(i => i.Stations)
+                    .ThenInclude(st => st.Coaches)
+            .Include(t => t.Coaches)
             .Include(t => t.Creator)
             .FirstOrDefaultAsync(t => t.Id == id && !t.IsDeleted);
     }

@@ -237,6 +237,68 @@ namespace Coaching.Infrastructure.Migrations
                     b.ToTable("DrillComments");
                 });
 
+            modelBuilder.Entity("Coaching.Domain.Models.Drills.DrillDial", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DefaultValue")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid>("DrillId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<string>("OffLabel")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("OffText")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("OnLabel")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("OnText")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int>("Order")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DrillId", "Name")
+                        .IsUnique();
+
+                    b.HasIndex("DrillId", "Order");
+
+                    b.ToTable("DrillDials", (string)null);
+                });
+
             modelBuilder.Entity("Coaching.Domain.Models.Drills.DrillEquipment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1276,6 +1338,37 @@ namespace Coaching.Infrastructure.Migrations
                     b.ToTable("TemplateBookmarks", (string)null);
                 });
 
+            modelBuilder.Entity("Coaching.Domain.Models.Templates.PlanCoach", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("PlanId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("PlanId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("PlanCoaches", (string)null);
+                });
+
             modelBuilder.Entity("Coaching.Domain.Models.Templates.PlanComment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1316,6 +1409,52 @@ namespace Coaching.Infrastructure.Migrations
                     b.ToTable("TemplateComments", (string)null);
                 });
 
+            modelBuilder.Entity("Coaching.Domain.Models.Templates.PlanCourtBooking", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CourtId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsOurs")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<Guid>("PlanId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Split")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("TakenBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("VenueId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PlanId", "CourtId")
+                        .IsUnique();
+
+                    b.HasIndex("PlanId", "VenueId");
+
+                    b.ToTable("PlanCourtBookings", (string)null);
+                });
+
             modelBuilder.Entity("Coaching.Domain.Models.Templates.PlanItem", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1325,7 +1464,7 @@ namespace Coaching.Infrastructure.Migrations
                     b.Property<DateTime?>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid>("DrillId")
+                    b.Property<Guid?>("DrillId")
                         .HasColumnType("uuid");
 
                     b.Property<int>("Duration")
@@ -1334,11 +1473,17 @@ namespace Coaching.Infrastructure.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Notes")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
 
                     b.Property<int>("Order")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("PlannedDuration")
                         .HasColumnType("integer");
 
                     b.Property<Guid?>("SectionId")
@@ -1346,6 +1491,10 @@ namespace Coaching.Infrastructure.Migrations
 
                     b.Property<Guid>("TemplateId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("Title")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1359,6 +1508,111 @@ namespace Coaching.Infrastructure.Migrations
                     b.HasIndex("TemplateId", "Order");
 
                     b.ToTable("TemplateItems", (string)null);
+                });
+
+            modelBuilder.Entity("Coaching.Domain.Models.Templates.PlanItemDialValue", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DialName")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid?>("ItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("PlanId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("StationItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PlanId");
+
+                    b.HasIndex("ItemId", "DialName")
+                        .IsUnique()
+                        .HasFilter("\"ItemId\" IS NOT NULL");
+
+                    b.HasIndex("StationItemId", "DialName")
+                        .IsUnique()
+                        .HasFilter("\"StationItemId\" IS NOT NULL");
+
+                    b.ToTable("PlanItemDialValues", (string)null);
+                });
+
+            modelBuilder.Entity("Coaching.Domain.Models.Templates.PlanItemPlacement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CourtId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid?>("ItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("PlanId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("StationItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("VenueId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ZoneId")
+                        .HasMaxLength(4)
+                        .HasColumnType("character varying(4)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PlanId", "VenueId");
+
+                    b.HasIndex("PlanId", "VenueId", "ItemId", "CourtId", "ZoneId")
+                        .IsUnique()
+                        .HasFilter("\"ItemId\" IS NOT NULL");
+
+                    NpgsqlIndexBuilderExtensions.AreNullsDistinct(b.HasIndex("PlanId", "VenueId", "ItemId", "CourtId", "ZoneId"), false);
+
+                    b.HasIndex("PlanId", "VenueId", "StationItemId", "CourtId", "ZoneId")
+                        .IsUnique()
+                        .HasFilter("\"StationItemId\" IS NOT NULL");
+
+                    NpgsqlIndexBuilderExtensions.AreNullsDistinct(b.HasIndex("PlanId", "VenueId", "StationItemId", "CourtId", "ZoneId"), false);
+
+                    b.ToTable("PlanItemPlacements", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PlanItemPlacements_OneAnchor", "(\"ItemId\" IS NULL) <> (\"StationItemId\" IS NULL)");
+                        });
                 });
 
             modelBuilder.Entity("Coaching.Domain.Models.Templates.PlanLike", b =>
@@ -1425,6 +1679,195 @@ namespace Coaching.Infrastructure.Migrations
                     b.ToTable("TemplateSections", (string)null);
                 });
 
+            modelBuilder.Entity("Coaching.Domain.Models.Templates.PlanStation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("PlanItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PlanItemId", "Order");
+
+                    b.ToTable("PlanStations", (string)null);
+                });
+
+            modelBuilder.Entity("Coaching.Domain.Models.Templates.PlanStationCoach", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("StationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("StationId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("PlanStationCoaches", (string)null);
+                });
+
+            modelBuilder.Entity("Coaching.Domain.Models.Templates.PlanStationItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DrillId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Duration")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("StationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Title")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DrillId");
+
+                    b.HasIndex("StationId", "Order");
+
+                    b.ToTable("PlanStationItems", (string)null);
+                });
+
+            modelBuilder.Entity("Coaching.Domain.Models.Templates.RunStation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("RunItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RunItemId", "Order");
+
+                    b.ToTable("RunStations", (string)null);
+                });
+
+            modelBuilder.Entity("Coaching.Domain.Models.Templates.RunStationItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DrillId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("DurationSeconds")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("RunStationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Title")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RunStationId", "Order");
+
+                    b.ToTable("RunStationItems", (string)null);
+                });
+
             modelBuilder.Entity("Coaching.Domain.Models.Templates.TrainingPlan", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1433,6 +1876,9 @@ namespace Coaching.Infrastructure.Migrations
 
                     b.Property<Guid?>("ClubId")
                         .HasColumnType("uuid");
+
+                    b.Property<int>("CoachedDuration")
+                        .HasColumnType("integer");
 
                     b.Property<DateTime?>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1567,11 +2013,14 @@ namespace Coaching.Infrastructure.Migrations
                     b.Property<DateTime?>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid>("DrillId")
+                    b.Property<Guid?>("DrillId")
                         .HasColumnType("uuid");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
 
                     b.Property<int>("Order")
                         .HasColumnType("integer");
@@ -1587,6 +2036,10 @@ namespace Coaching.Infrastructure.Migrations
 
                     b.Property<DateTime?>("StartedAtUtc")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Title")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1878,6 +2331,17 @@ namespace Coaching.Infrastructure.Migrations
                     b.Navigation("ParentComment");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Coaching.Domain.Models.Drills.DrillDial", b =>
+                {
+                    b.HasOne("Coaching.Domain.Models.Drills.Drill", "Drill")
+                        .WithMany("Dials")
+                        .HasForeignKey("DrillId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Drill");
                 });
 
             modelBuilder.Entity("Coaching.Domain.Models.Drills.DrillEquipment", b =>
@@ -2192,6 +2656,17 @@ namespace Coaching.Infrastructure.Migrations
                     b.Navigation("Plan");
                 });
 
+            modelBuilder.Entity("Coaching.Domain.Models.Templates.PlanCoach", b =>
+                {
+                    b.HasOne("Coaching.Domain.Models.Templates.TrainingPlan", "Plan")
+                        .WithMany("Coaches")
+                        .HasForeignKey("PlanId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Plan");
+                });
+
             modelBuilder.Entity("Coaching.Domain.Models.Templates.PlanComment", b =>
                 {
                     b.HasOne("Coaching.Domain.Models.Templates.PlanComment", "ParentComment")
@@ -2218,13 +2693,23 @@ namespace Coaching.Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("Coaching.Domain.Models.Templates.PlanCourtBooking", b =>
+                {
+                    b.HasOne("Coaching.Domain.Models.Templates.TrainingPlan", "Plan")
+                        .WithMany("CourtBookings")
+                        .HasForeignKey("PlanId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Plan");
+                });
+
             modelBuilder.Entity("Coaching.Domain.Models.Templates.PlanItem", b =>
                 {
                     b.HasOne("Coaching.Domain.Models.Drills.Drill", "Drill")
                         .WithMany()
                         .HasForeignKey("DrillId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Coaching.Domain.Models.Templates.PlanSection", "Section")
                         .WithMany("Items")
@@ -2242,6 +2727,28 @@ namespace Coaching.Infrastructure.Migrations
                     b.Navigation("Plan");
 
                     b.Navigation("Section");
+                });
+
+            modelBuilder.Entity("Coaching.Domain.Models.Templates.PlanItemDialValue", b =>
+                {
+                    b.HasOne("Coaching.Domain.Models.Templates.TrainingPlan", "Plan")
+                        .WithMany("DialValues")
+                        .HasForeignKey("PlanId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Plan");
+                });
+
+            modelBuilder.Entity("Coaching.Domain.Models.Templates.PlanItemPlacement", b =>
+                {
+                    b.HasOne("Coaching.Domain.Models.Templates.TrainingPlan", "Plan")
+                        .WithMany("Placements")
+                        .HasForeignKey("PlanId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Plan");
                 });
 
             modelBuilder.Entity("Coaching.Domain.Models.Templates.PlanLike", b =>
@@ -2264,6 +2771,68 @@ namespace Coaching.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Plan");
+                });
+
+            modelBuilder.Entity("Coaching.Domain.Models.Templates.PlanStation", b =>
+                {
+                    b.HasOne("Coaching.Domain.Models.Templates.PlanItem", "Item")
+                        .WithMany("Stations")
+                        .HasForeignKey("PlanItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Item");
+                });
+
+            modelBuilder.Entity("Coaching.Domain.Models.Templates.PlanStationCoach", b =>
+                {
+                    b.HasOne("Coaching.Domain.Models.Templates.PlanStation", "Station")
+                        .WithMany("Coaches")
+                        .HasForeignKey("StationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Station");
+                });
+
+            modelBuilder.Entity("Coaching.Domain.Models.Templates.PlanStationItem", b =>
+                {
+                    b.HasOne("Coaching.Domain.Models.Drills.Drill", "Drill")
+                        .WithMany()
+                        .HasForeignKey("DrillId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Coaching.Domain.Models.Templates.PlanStation", "Station")
+                        .WithMany("Items")
+                        .HasForeignKey("StationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Drill");
+
+                    b.Navigation("Station");
+                });
+
+            modelBuilder.Entity("Coaching.Domain.Models.Templates.RunStation", b =>
+                {
+                    b.HasOne("Coaching.Domain.Models.Templates.TrainingPlanRunItem", "RunItem")
+                        .WithMany("Stations")
+                        .HasForeignKey("RunItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("RunItem");
+                });
+
+            modelBuilder.Entity("Coaching.Domain.Models.Templates.RunStationItem", b =>
+                {
+                    b.HasOne("Coaching.Domain.Models.Templates.RunStation", "Station")
+                        .WithMany("Items")
+                        .HasForeignKey("RunStationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Station");
                 });
 
             modelBuilder.Entity("Coaching.Domain.Models.Templates.TrainingPlan", b =>
@@ -2318,6 +2887,8 @@ namespace Coaching.Infrastructure.Migrations
                     b.Navigation("Bookmarks");
 
                     b.Navigation("Comments");
+
+                    b.Navigation("Dials");
 
                     b.Navigation("Equipment");
 
@@ -2406,7 +2977,24 @@ namespace Coaching.Infrastructure.Migrations
                     b.Navigation("Replies");
                 });
 
+            modelBuilder.Entity("Coaching.Domain.Models.Templates.PlanItem", b =>
+                {
+                    b.Navigation("Stations");
+                });
+
             modelBuilder.Entity("Coaching.Domain.Models.Templates.PlanSection", b =>
+                {
+                    b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("Coaching.Domain.Models.Templates.PlanStation", b =>
+                {
+                    b.Navigation("Coaches");
+
+                    b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("Coaching.Domain.Models.Templates.RunStation", b =>
                 {
                     b.Navigation("Items");
                 });
@@ -2415,11 +3003,19 @@ namespace Coaching.Infrastructure.Migrations
                 {
                     b.Navigation("Bookmarks");
 
+                    b.Navigation("Coaches");
+
                     b.Navigation("Comments");
+
+                    b.Navigation("CourtBookings");
+
+                    b.Navigation("DialValues");
 
                     b.Navigation("Items");
 
                     b.Navigation("Likes");
+
+                    b.Navigation("Placements");
 
                     b.Navigation("Sections");
                 });
@@ -2427,6 +3023,11 @@ namespace Coaching.Infrastructure.Migrations
             modelBuilder.Entity("Coaching.Domain.Models.Templates.TrainingPlanRun", b =>
                 {
                     b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("Coaching.Domain.Models.Templates.TrainingPlanRunItem", b =>
+                {
+                    b.Navigation("Stations");
                 });
 #pragma warning restore 612, 618
         }

@@ -13,6 +13,7 @@ using Coaching.Domain.Models.Templates;
 using Coaching.Infrastructure.Data.Context;
 using Coaching.Tests.Integration.Fixtures;
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using NSubstitute;
@@ -334,7 +335,186 @@ public class RunControllerTests
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
+    // ---------- Stations ----------
+
+    [Test]
+    public async Task StartRun_WithAStationsBlock_ReturnsTheGroupsWithTheRun()
+    {
+        // Arrange
+        var (eventId, _, stationsItemId) = await SeedPlanWithStationsAsync();
+        SetAuth(CreatorId);
+
+        // Act
+        var response = await _client.PostAsync($"/v1/events/{eventId}/plans/run/start", null);
+
+        // Assert
+        var run = await response.Content.ReadFromJsonAsync<RunDto>(JsonOptions);
+        var block = run!.Items.Single(i => i.PlanItemId == stationsItemId);
+        block.Kind.Should().Be(ItemKind.Stations);
+        block.Stations.Select(s => s.Name).Should().ContainInOrder("Setters", "Hitters");
+        block.Stations.Single(s => s.Name == "Hitters").Items.Should().HaveCount(2);
+        block.Stations.SelectMany(s => s.Items).Should().Contain(r => r.Kind == ItemKind.Break && r.DrillId == null);
+    }
+
+    [Test]
+    public async Task StartRun_Restarted_ReSnapshotsGroupsAndLeavesNoOrphanRows()
+    {
+        // Arrange — a finished run, then the coach reworks the block and starts again. The
+        // reconcile reuses the run item (its timings are the run's) but its groups are pure
+        // snapshot, so they are taken again. EF infers Added-vs-Modified from whether the key is
+        // set and BaseEntity sets it in its constructor, so this is exactly the shape that
+        // saves a never-inserted row as an UPDATE — it has to be exercised against a real
+        // database, not a substitute.
+        var (eventId, _, stationsItemId) = await SeedPlanWithStationsAsync();
+        SetAuth(CreatorId);
+        await _client.PostAsync($"/v1/events/{eventId}/plans/run/start", null);
+        await _client.PostAsync($"/v1/events/{eventId}/plans/run/complete", null);
+        await RenameTheOnlyRemainingGroupAsync(stationsItemId);
+
+        // Act
+        var response = await _client.PostAsync($"/v1/events/{eventId}/plans/run/start", null);
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var run = await response.Content.ReadFromJsonAsync<RunDto>(JsonOptions);
+        run!.Items.Single(i => i.PlanItemId == stationsItemId)
+            .Stations.Select(s => s.Name).Should().Equal("Passers");
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<CoachingDbContext>();
+        db.RunStations.Should().HaveCount(1);
+        db.RunStationItems.Should().HaveCount(1);
+    }
+
+    [Test]
+    public async Task StartRun_Restarted_AfterARowWasAddedToThePlan_SnapshotsTheNewRow()
+    {
+        // Arrange — the other half of the reconcile: a run item that did not exist last time is
+        // added to a run the context is already tracking.
+        var (eventId, planId, _) = await SeedPlanWithStationsAsync();
+        SetAuth(CreatorId);
+        await _client.PostAsync($"/v1/events/{eventId}/plans/run/start", null);
+        await _client.PostAsync($"/v1/events/{eventId}/plans/run/complete", null);
+        var addedItemId = await AppendABreakToThePlanAsync(planId);
+
+        // Act
+        var response = await _client.PostAsync($"/v1/events/{eventId}/plans/run/start", null);
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var run = await response.Content.ReadFromJsonAsync<RunDto>(JsonOptions);
+        var added = run!.Items.Single(i => i.PlanItemId == addedItemId);
+        added.Kind.Should().Be(ItemKind.Break);
+        added.Title.Should().Be("Cool down");
+    }
+
     // ---------- Helpers ----------
+
+    /// <summary>Drops the second group and renames the first, as a coach reworking the block would.</summary>
+    private async Task RenameTheOnlyRemainingGroupAsync(Guid stationsItemId)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<CoachingDbContext>();
+        var stations = await db.PlanStations
+            .Where(s => s.PlanItemId == stationsItemId)
+            .OrderBy(s => s.Order)
+            .ToListAsync();
+
+        db.PlanStations.Remove(stations.Last());
+        stations.First().Name = "Passers";
+        await db.SaveChangesAsync();
+    }
+
+    private async Task<Guid> AppendABreakToThePlanAsync(Guid planId)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<CoachingDbContext>();
+        var item = new PlanItem
+        {
+            TemplateId = planId,
+            Kind = ItemKind.Break,
+            Title = "Cool down",
+            Order = 3,
+            Duration = 5
+        };
+        db.PlanItems.Add(item);
+        await db.SaveChangesAsync();
+        return item.Id;
+    }
+
+    /// <summary>
+    /// A water break, then a Stations block split into two groups — the second of which takes
+    /// its own water while the first keeps playing.
+    /// </summary>
+    private async Task<(Guid eventId, Guid planId, Guid stationsItemId)> SeedPlanWithStationsAsync()
+    {
+        var eventId = Guid.NewGuid();
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<CoachingDbContext>();
+
+        db.Set<UserProfile>().Add(new UserProfile
+        {
+            Id = CreatorId,
+            Name = "Coach",
+            Surname = "Creator",
+            Email = "coach.creator@test.com"
+        });
+
+        var setters = new Drill { Id = Guid.NewGuid(), Name = "Hands", CreatedByUserId = CreatorId };
+        var hitters = new Drill { Id = Guid.NewGuid(), Name = "Approach", CreatedByUserId = CreatorId };
+        db.Drills.AddRange(setters, hitters);
+
+        var planId = Guid.NewGuid();
+        var stationsItemId = Guid.NewGuid();
+        db.TrainingPlans.Add(new TrainingPlan
+        {
+            Id = planId,
+            Name = "Instance Plan",
+            CreatedByUserId = CreatorId,
+            PlanType = PlanType.Instance,
+            EventId = eventId,
+            Visibility = TemplateVisibility.Private,
+            Items =
+            [
+                new PlanItem
+                {
+                    TemplateId = planId, Kind = ItemKind.Break, Title = "Water", Order = 1, Duration = 5
+                },
+                new PlanItem
+                {
+                    Id = stationsItemId,
+                    TemplateId = planId,
+                    Kind = ItemKind.Stations,
+                    Title = "Stations",
+                    Order = 2,
+                    Duration = 20,
+                    PlannedDuration = 20,
+                    Stations =
+                    [
+                        new PlanStation
+                        {
+                            Name = "Setters",
+                            Order = 0,
+                            Items = [new PlanStationItem { Kind = ItemKind.Drill, DrillId = setters.Id, Order = 0, Duration = 20 }]
+                        },
+                        new PlanStation
+                        {
+                            Name = "Hitters",
+                            Order = 1,
+                            Items =
+                            [
+                                new PlanStationItem { Kind = ItemKind.Drill, DrillId = hitters.Id, Order = 0, Duration = 12 },
+                                new PlanStationItem { Kind = ItemKind.Break, Title = "Water", Order = 1, Duration = 8 }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        });
+
+        await db.SaveChangesAsync();
+        return (eventId, planId, stationsItemId);
+    }
 
     private void StubParticipant(Guid eventId) =>
         _factory.EventsGrpcClient.IsEventParticipantAsync(eventId, Arg.Any<Guid>()).Returns((true, true));

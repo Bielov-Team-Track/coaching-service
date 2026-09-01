@@ -50,6 +50,19 @@ public class DrillServiceTests
             .Returns(call => call.Arg<IEnumerable<Drill>>()
                 .Select(d => new DrillDto { Id = d.Id, Name = d.Name, ClubId = d.ClubId, CreatedByUserId = d.CreatedByUserId })
                 .ToList());
+        _mapper.Map<DrillDto>(Arg.Any<Drill>())
+            .Returns(call =>
+            {
+                var drill = call.Arg<Drill>();
+                return new DrillDto
+                {
+                    Id = drill.Id,
+                    Name = drill.Name,
+                    ClubId = drill.ClubId,
+                    CreatedByUserId = drill.CreatedByUserId,
+                    Visibility = drill.Visibility
+                };
+            });
 
         _sut = new DrillService(
             _drillRepository,
@@ -61,7 +74,8 @@ public class DrillServiceTests
             Substitute.For<IFileService>(),
             Options.Create(new S3Settings { Bucket = "test-bucket", PublicBaseUrl = "https://cdn.test" }),
             _mapper,
-            Substitute.For<ILogger<DrillService>>());
+            Substitute.For<ILogger<DrillService>>(),
+            Substitute.For<IDrillDialReconciler>());
     }
 
     private static Drill BuildDrill(
@@ -78,6 +92,38 @@ public class DrillServiceTests
 
     private void StubDrills(params Drill[] drills) =>
         _drillRepository.Query().Returns(drills.ToList().BuildMock());
+
+    [Test]
+    public async Task GetByIdAsync_PrivateClubDrill_MemberCanRead()
+    {
+        // Arrange
+        var clubDrill = BuildDrill(clubId: ClubId);
+        _drillRepository.GetByIdWithDetailsAsync(clubDrill.Id).Returns(clubDrill);
+        _clubsClient.IsUserClubMemberAsync(UserId, ClubId).Returns(true);
+
+        // Act
+        var result = await _sut.GetByIdAsync(clubDrill.Id, UserId);
+
+        // Assert
+        result.Should().NotBeNull();
+        result!.Id.Should().Be(clubDrill.Id);
+        await _clubsClient.Received(1).IsUserClubMemberAsync(UserId, ClubId);
+    }
+
+    [Test]
+    public async Task GetByIdAsync_PrivateClubDrill_NonMemberIsForbidden()
+    {
+        // Arrange
+        var clubDrill = BuildDrill(clubId: ClubId);
+        _drillRepository.GetByIdWithDetailsAsync(clubDrill.Id).Returns(clubDrill);
+        _clubsClient.IsUserClubMemberAsync(UserId, ClubId).Returns(false);
+
+        // Act
+        var act = () => _sut.GetByIdAsync(clubDrill.Id, UserId);
+
+        // Assert
+        await act.Should().ThrowAsync<Shared.Exceptions.ForbiddenException>();
+    }
 
     [Test]
     public async Task GetByFilterAsync_ScopeClub_MemberSeesClubDrills()

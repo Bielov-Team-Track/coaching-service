@@ -39,7 +39,14 @@ public class RunServiceTests : UnitTestBase
         _planRepository = Substitute.For<ITrainingPlanRepository>();
         _broadcaster = Substitute.For<IRunBroadcaster>();
         _eventsGrpcClient = Substitute.For<IEventsGrpcClient>();
-        _sut = new RunService(_runRepository, _planRepository, _broadcaster, _eventsGrpcClient, TimeProvider);
+        _sut = new RunService(
+            _runRepository,
+            Substitute.For<ITrainingPlanRunItemRepository>(),
+            Substitute.For<IRunStationRepository>(),
+            _planRepository,
+            _broadcaster,
+            _eventsGrpcClient,
+            TimeProvider);
     }
 
     // Two-item instance plan created by CreatorId, attached to EventId.
@@ -225,6 +232,42 @@ public class RunServiceTests : UnitTestBase
         result.CurrentItemPausedElapsedSeconds.Should().Be(90);
         result.CurrentItemStartedAt.Should().BeNull();
         await _runRepository.Received(1).SaveChangesAsync();
+    }
+
+    [Test]
+    public async Task PauseAsync_EventAdminWhoDidNotCreateThePlan_MayControlTheRun()
+    {
+        // Arrange — the lead coach of the event runs the session from the floor; the plan may
+        // have been built by someone else entirely.
+        var plan = BuildPlan();
+        StubPlanQuery(plan);
+        var run = RunningRunOnFirstItem(startedSecondsAgo: 0);
+        StubExistingRun(run);
+        _eventsGrpcClient.IsEventAdminAsync(EventId, OtherUserId).Returns(true);
+        AdvanceTime(TimeSpan.FromSeconds(30));
+
+        // Act
+        var result = await _sut.PauseAsync(EventId, OtherUserId);
+
+        // Assert
+        result.Status.Should().Be(RunStatus.Paused);
+        result.CurrentItemPausedElapsedSeconds.Should().Be(30);
+    }
+
+    [Test]
+    public async Task PauseAsync_NeitherCreatorNorEventAdmin_ThrowsForbidden()
+    {
+        // Arrange
+        var plan = BuildPlan();
+        StubPlanQuery(plan);
+        StubExistingRun(RunningRunOnFirstItem(startedSecondsAgo: 0));
+        _eventsGrpcClient.IsEventAdminAsync(EventId, OtherUserId).Returns(false);
+
+        // Act
+        var act = () => _sut.PauseAsync(EventId, OtherUserId);
+
+        // Assert
+        await act.Should().ThrowAsync<ForbiddenException>();
     }
 
     [Test]

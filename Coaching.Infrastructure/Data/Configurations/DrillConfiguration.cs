@@ -12,7 +12,7 @@ public class DrillConfiguration : IEntityTypeConfiguration<Drill>
 
         builder.Property(e => e.Name)
             .IsRequired()
-            .HasMaxLength(200);
+            .HasMaxLength(Drill.NameMaxLength);
 
         builder.Property(e => e.Description)
             .IsRequired(false);
@@ -30,7 +30,7 @@ public class DrillConfiguration : IEntityTypeConfiguration<Drill>
             .IsRequired();
 
         builder.Property(e => e.VideoUrl)
-            .HasMaxLength(500)
+            .HasMaxLength(Drill.VideoUrlMaxLength)
             .IsRequired(false);
 
         builder.Property(e => e.CreatedByUserId)

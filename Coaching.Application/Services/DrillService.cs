@@ -29,6 +29,13 @@ public class DrillService : IDrillService
     private readonly S3Settings _s3Settings;
     private readonly IMapper _mapper;
     private readonly ILogger<DrillService> _logger;
+    private readonly IDrillDialReconciler _dialReconciler;
+
+    /// <summary>
+    /// The most rows one import request may carry. Public because the ceiling is part of the
+    /// contract: a client with a larger spreadsheet has to split it into batches of this size.
+    /// </summary>
+    public const int MaxImportRows = 500;
 
     public DrillService(
         IDrillRepository drillRepository,
@@ -40,7 +47,8 @@ public class DrillService : IDrillService
         IFileService fileService,
         IOptions<S3Settings> s3Settings,
         IMapper mapper,
-        ILogger<DrillService> logger)
+        ILogger<DrillService> logger,
+        IDrillDialReconciler dialReconciler)
     {
         _drillRepository = drillRepository;
         _likeRepository = likeRepository;
@@ -52,6 +60,7 @@ public class DrillService : IDrillService
         _s3Settings = s3Settings.Value;
         _mapper = mapper;
         _logger = logger;
+        _dialReconciler = dialReconciler;
     }
 
     public async Task<PagedResponse<DrillDto>> GetByFilterAsync(DrillFilterRequest filter, Guid? userId = null)
@@ -99,6 +108,7 @@ public class DrillService : IDrillService
         var drills = await query
             .Include(d => d.Attachments.OrderBy(a => a.Order))
             .Include(d => d.Equipment.OrderBy(e => e.Order))
+            .Include(d => d.Dials.OrderBy(dial => dial.Order))
             .Include(d => d.Creator)
             .ToListAsync();
 
@@ -119,7 +129,11 @@ public class DrillService : IDrillService
             if (!userId.HasValue)
                 throw new ForbiddenException("This drill is private");
 
-            if (drill.CreatedByUserId != userId.Value)
+            var canRead = drill.CreatedByUserId == userId.Value;
+            if (!canRead && drill.ClubId.HasValue)
+                canRead = await _clubsClient.IsUserClubMemberAsync(userId.Value, drill.ClubId.Value);
+
+            if (!canRead)
             {
                 throw new ForbiddenException("This drill is private");
             }
@@ -136,6 +150,9 @@ public class DrillService : IDrillService
         if (string.IsNullOrWhiteSpace(request.Name))
             throw new BadRequestException("Name is required", ErrorCodeEnum.ValidationError);
 
+        if (request.ClubId.HasValue)
+            await EnsureCanManageClubDrillsAsync(request.ClubId.Value, userId);
+
         // Validate variation drill IDs exist
         var variationDrillIds = request.Variations?.Select(v => v.DrillId).Distinct().ToList() ?? [];
         if (variationDrillIds.Count > 0)
@@ -150,8 +167,8 @@ public class DrillService : IDrillService
                 throw new BadRequestException($"Variation drill(s) not found: {string.Join(", ", missingIds)}", ErrorCodeEnum.EntityNotFound);
         }
 
-        var instructions = ResolveProse(request.InstructionsHtml, request.Instructions, ordered: true);
-        var coachingPoints = ResolveProse(request.CoachingPointsHtml, request.CoachingPoints, ordered: false);
+        var instructions = DrillRichText.Resolve(request.InstructionsHtml, request.Instructions, ordered: true);
+        var coachingPoints = DrillRichText.Resolve(request.CoachingPointsHtml, request.CoachingPoints, ordered: false);
 
         var drill = new Drill
         {
@@ -207,6 +224,10 @@ public class DrillService : IDrillService
         }
 
         _drillRepository.Add(drill);
+
+        if (request.Dials is not null)
+            await _dialReconciler.ReconcileAsync(drill, request.Dials);
+
         await _drillRepository.SaveChangesAsync();
 
         // Re-fetch with details for proper mapping
@@ -214,6 +235,120 @@ public class DrillService : IDrillService
         var dto = _mapper.Map<DrillDto>(createdDrill);
         await EnrichWithClubInfoAsync([dto]);
         return dto;
+    }
+
+    /// <summary>
+    /// Create many drills from a parsed spreadsheet. Rows that fail validation are reported back
+    /// against their own line number rather than failing the batch, so one bad cell in a hundred
+    /// rows costs the coach one correction instead of the whole import.
+    /// </summary>
+    public async Task<ImportDrillsResultDto> ImportAsync(ImportDrillsDto request, Guid userId)
+    {
+        if (request.Drills is null || request.Drills.Count == 0)
+            throw new BadRequestException("No drills to import", ErrorCodeEnum.ValidationError);
+
+        if (request.Drills.Count > MaxImportRows)
+            throw new BadRequestException(
+                $"An import carries at most {MaxImportRows} drills; this one has {request.Drills.Count}",
+                ErrorCodeEnum.ValidationError);
+
+        // The destination is chosen once for the batch, so the club is authorized once too.
+        if (request.ClubId.HasValue)
+            await EnsureCanManageClubDrillsAsync(request.ClubId.Value, userId);
+
+        var results = new List<ImportDrillResultDto>(request.Drills.Count);
+        var toCreate = new List<Drill>();
+
+        foreach (var row in request.Drills)
+        {
+            var error = ValidateImportRow(row);
+            if (error is not null)
+            {
+                results.Add(new ImportDrillResultDto(row.RowNumber, row.Name, null, error));
+                continue;
+            }
+
+            var drill = BuildImportedDrill(row, request, userId);
+            toCreate.Add(drill);
+            results.Add(new ImportDrillResultDto(row.RowNumber, drill.Name, drill.Id, null));
+        }
+
+        if (toCreate.Count > 0)
+        {
+            _drillRepository.AddRange(toCreate);
+            await _drillRepository.SaveChangesAsync();
+        }
+
+        return new ImportDrillsResultDto(toCreate.Count, results.Count - toCreate.Count, results);
+    }
+
+    private static string? ValidateImportRow(ImportDrillRowDto row)
+    {
+        if (string.IsNullOrWhiteSpace(row.Name))
+            return "Name is required";
+
+        // The database's limits, not taste. One over-long cell threw out of the single save and
+        // took every good row in the batch down with it.
+        if (row.Name.Trim().Length > Drill.NameMaxLength)
+            return $"Name is longer than {Drill.NameMaxLength} characters";
+
+        if (row.VideoUrl?.Length > Drill.VideoUrlMaxLength)
+            return $"Video link is longer than {Drill.VideoUrlMaxLength} characters";
+
+        if (row.Equipment?.Any(item => item.Name?.Length > DrillEquipment.NameMaxLength) == true)
+            return $"Equipment name is longer than {DrillEquipment.NameMaxLength} characters";
+
+        if (row.Duration is < 0)
+            return "Duration cannot be negative";
+
+        if (row.MinPlayers is < 0 || row.MaxPlayers is < 0)
+            return "Player counts cannot be negative";
+
+        if (row.MinPlayers.HasValue && row.MaxPlayers.HasValue && row.MinPlayers > row.MaxPlayers)
+            return "Minimum players cannot exceed maximum players";
+
+        return null;
+    }
+
+    private static Drill BuildImportedDrill(ImportDrillRowDto row, ImportDrillsDto request, Guid userId)
+    {
+        var instructions = DrillRichText.Resolve(null, row.Instructions, ordered: true);
+        var coachingPoints = DrillRichText.Resolve(null, row.CoachingPoints, ordered: false);
+
+        var drill = new Drill
+        {
+            Name = row.Name.Trim(),
+            Description = row.Description,
+            Category = row.Category,
+            Intensity = row.Intensity,
+            Visibility = request.Visibility,
+            Skills = row.Skills ?? [],
+            Duration = row.Duration,
+            MinPlayers = row.MinPlayers,
+            MaxPlayers = row.MaxPlayers,
+            InstructionsHtml = instructions.Html,
+            Instructions = instructions.Lines,
+            CoachingPointsHtml = coachingPoints.Html,
+            CoachingPoints = coachingPoints.Lines,
+            VideoUrl = row.VideoUrl,
+            CreatedByUserId = userId,
+            ClubId = request.ClubId,
+            LikeCount = 0
+        };
+
+        var equipment = row.Equipment ?? [];
+        for (int i = 0; i < equipment.Length; i++)
+        {
+            drill.Equipment.Add(new DrillEquipment
+            {
+                DrillId = drill.Id,
+                Name = equipment[i].Name,
+                IsOptional = equipment[i].IsOptional,
+                Order = i
+            });
+        }
+
+        return drill;
     }
 
     public async Task<DrillDto> UpdateAsync(UpdateDrillDto request, Guid userId)
@@ -224,6 +359,18 @@ public class DrillService : IDrillService
 
         if (!CanModifyDrill(drill, userId))
             throw new ForbiddenException("Only the creator can update this drill");
+
+        if (string.IsNullOrWhiteSpace(request.Name))
+            throw new BadRequestException("Name is required", ErrorCodeEnum.ValidationError);
+
+        // Updating a club drill affects the current club even when the request moves it out.
+        // A move to another club affects both clubs, so authorization is required in each.
+        var affectedClubIds = new[] { drill.ClubId, request.ClubId }
+            .Where(clubId => clubId.HasValue)
+            .Select(clubId => clubId!.Value)
+            .Distinct();
+        foreach (var clubId in affectedClubIds)
+            await EnsureCanManageClubDrillsAsync(clubId, userId);
 
         // Validate variation drill IDs exist
         var variationDrillIds = request.Variations?.Select(v => v.DrillId).Distinct().ToList() ?? [];
@@ -252,8 +399,8 @@ public class DrillService : IDrillService
         drill.Duration = request.Duration;
         drill.MinPlayers = request.MinPlayers;
         drill.MaxPlayers = request.MaxPlayers;
-        var instructions = ResolveProse(request.InstructionsHtml, request.Instructions, ordered: true);
-        var coachingPoints = ResolveProse(request.CoachingPointsHtml, request.CoachingPoints, ordered: false);
+        var instructions = DrillRichText.Resolve(request.InstructionsHtml, request.Instructions, ordered: true);
+        var coachingPoints = DrillRichText.Resolve(request.CoachingPointsHtml, request.CoachingPoints, ordered: false);
         drill.InstructionsHtml = instructions.Html;
         drill.Instructions = instructions.Lines;
         drill.CoachingPointsHtml = coachingPoints.Html;
@@ -271,6 +418,9 @@ public class DrillService : IDrillService
                 var equipmentInput = request.Equipment[i];
                 drill.Equipment.Add(new DrillEquipment
                 {
+                    // This entity is being attached to an already tracked aggregate. An empty
+                    // generated key tells EF unequivocally that this is a new child row.
+                    Id = Guid.Empty,
                     DrillId = drill.Id,
                     Name = equipmentInput.Name,
                     IsOptional = equipmentInput.IsOptional,
@@ -288,6 +438,7 @@ public class DrillService : IDrillService
                 var variationInput = request.Variations[i];
                 drill.Variations.Add(new DrillVariation
                 {
+                    Id = Guid.Empty,
                     SourceDrillId = drill.Id,
                     TargetDrillId = variationInput.DrillId,
                     Note = variationInput.Note,
@@ -296,7 +447,15 @@ public class DrillService : IDrillService
             }
         }
 
-        _drillRepository.Update(drill);
+        // Null leaves the dials alone — a client that has never heard of dials cannot
+        // strip them by omission.
+        if (request.Dials is not null)
+            await _dialReconciler.ReconcileAsync(drill, request.Dials);
+
+        // GetByIdWithDetailsAsync returns a tracked aggregate. Saving it directly lets EF keep
+        // replacement children as Added and removed children as Deleted. Calling Update on the
+        // whole graph would mark the newly generated equipment/variation IDs as Modified and
+        // issue UPDATE statements for rows that do not exist.
         await _drillRepository.SaveChangesAsync();
 
         // Re-fetch with details for proper mapping
@@ -351,6 +510,9 @@ public class DrillService : IDrillService
         if (!clubId.HasValue) return null;
         return await _clubsClient.IsUserClubMemberAsync(userId, clubId.Value) ? clubId : null;
     }
+
+    private Task EnsureCanManageClubDrillsAsync(Guid clubId, Guid userId) =>
+        DrillEditRules.EnsureCanManageClubDrillsAsync(clubId, userId, _clubsClient);
 
     // =========================================================================
     // LIKES
@@ -666,10 +828,7 @@ public class DrillService : IDrillService
         return dto;
     }
 
-    private bool CanModifyDrill(Drill drill, Guid userId)
-    {
-        return drill.CreatedByUserId == userId;
-    }
+    private bool CanModifyDrill(Drill drill, Guid userId) => DrillEditRules.IsCreator(drill, userId);
 
     private async Task EnrichWithUserInteractionsAsync(IEnumerable<DrillDto> drills, Guid? userId)
     {
@@ -729,21 +888,6 @@ public class DrillService : IDrillService
         {
             _logger.LogWarning(ex, "Failed to enrich drills with club info");
         }
-    }
-
-    /// <summary>
-    /// HTML is the source of truth when the client sends it; otherwise it is built
-    /// from the legacy arrays. Either way both columns are written, so every reader
-    /// sees the same content whichever shape it asks for.
-    /// </summary>
-    private static (string? Html, string[] Lines) ResolveProse(string? html, string[]? lines, bool ordered)
-    {
-        var sanitized = DrillRichText.Sanitize(html);
-        if (sanitized is not null)
-            return (sanitized, DrillRichText.ToLines(sanitized));
-
-        var fallback = lines ?? [];
-        return (DrillRichText.FromLines(fallback, ordered), fallback);
     }
 
 }
