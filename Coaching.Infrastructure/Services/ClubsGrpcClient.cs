@@ -2,6 +2,7 @@ using Coaching.Application.Interfaces.Services;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Shared.Contracts.Grpc;
+using Shared.Enums;
 
 namespace Coaching.Infrastructure.Services;
 
@@ -17,6 +18,22 @@ public class ClubsGrpcClient : IClubsGrpcClient
 
     private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(5);
     private const string CacheKeyPrefix = "club_info_";
+
+    // Role NAMES, because that is what the wire carries — the role enums live in clubs-service.
+    // Both lists mirror who holds feedback.give and unit.feedback.give in clubs-service's
+    // PermissionMap, and must move with it. Once this service's shared pin carries the
+    // `permissions` field that GetMembership and CheckUserClubRoles already answer with, ask for
+    // the permission instead and delete both lists.
+    //
+    // Admin is here for feedback and not in PermissionMap: club admins could give feedback before
+    // the permission model landed, and this fix is not the place to take that away.
+    private static readonly HashSet<string> FeedbackGivingClubRoles =
+        new(StringComparer.OrdinalIgnoreCase) { "Owner", "Admin", "HeadCoach", "Coach" };
+
+    // Deliberately narrower than the unit staff set: a Manager (team Manager/Admin, group Admin)
+    // runs the unit's logistics without coaching it, and a Helper was never authority at all.
+    private static readonly HashSet<string> FeedbackGivingUnitRoles =
+        new(StringComparer.OrdinalIgnoreCase) { "Coach", "AssistantCoach" };
 
     public ClubsGrpcClient(
         ClubsInternalService.ClubsInternalServiceClient grpcClient,
@@ -108,40 +125,97 @@ public class ClubsGrpcClient : IClubsGrpcClient
 
     public async Task<bool> IsUserClubMemberAsync(Guid userId, Guid clubId)
     {
-        try
-        {
-            var response = await _grpcClient.CheckUserClubRolesAsync(new CheckUserClubRolesRequest
-            {
-                UserId = userId.ToString(),
-                ClubId = clubId.ToString()
-            });
-            return response.IsMember;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to check club membership via gRPC for user {UserId}, club {ClubId}",
-                userId, clubId);
-            return false;
-        }
+        var response = await CheckClubRolesAsync(userId, clubId);
+        return response?.IsMember ?? false;
     }
 
     public async Task<bool> IsUserCoachInClubAsync(Guid userId, Guid clubId)
     {
+        var response = await CheckClubRolesAsync(userId, clubId);
+        // Keep this aligned with clubs-service's ClubMemberExtensions.IsHeadCoachOrAbove.
+        return response != null
+            && response.IsMember
+            && response.Roles.Any(r => r is "HeadCoach" or "Admin" or "Owner");
+    }
+
+    public async Task<bool> CanGiveFeedbackInClubAsync(Guid userId, Guid clubId)
+    {
+        var response = await CheckClubRolesAsync(userId, clubId);
+        return response != null
+            && response.IsMember
+            && response.Roles.Any(FeedbackGivingClubRoles.Contains);
+    }
+
+    public async Task<bool> CanGiveFeedbackInUnitAsync(Guid userId, ContextType contextType, Guid contextId)
+    {
+        var response = await GetUnitMembershipAsync(userId, contextType, contextId);
+        return response != null
+            && response.IsMember
+            && response.Roles.Any(FeedbackGivingUnitRoles.Contains);
+    }
+
+    public async Task<bool> IsUserUnitMemberAsync(Guid userId, ContextType contextType, Guid contextId)
+    {
+        var response = await GetUnitMembershipAsync(userId, contextType, contextId);
+        return response?.IsMember ?? false;
+    }
+
+    public async Task<Guid?> ResolveClubIdAsync(ContextType contextType, Guid contextId)
+    {
         try
         {
-            var response = await _grpcClient.CheckUserClubRolesAsync(new CheckUserClubRolesRequest
+            var response = await _grpcClient.ResolveClubIdAsync(new ResolveClubIdRequest
+            {
+                ContextType = contextType.ToString(),
+                ContextId = contextId.ToString()
+            });
+
+            return response.Found && Guid.TryParse(response.ClubId, out var clubId) ? clubId : null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to resolve the club of {ContextType} {ContextId} via gRPC",
+                contextType, contextId);
+            return null;
+        }
+    }
+
+    private async Task<CheckUserClubRolesResponse?> CheckClubRolesAsync(Guid userId, Guid clubId)
+    {
+        try
+        {
+            return await _grpcClient.CheckUserClubRolesAsync(new CheckUserClubRolesRequest
             {
                 UserId = userId.ToString(),
                 ClubId = clubId.ToString()
             });
-            // Keep this aligned with clubs-service's ClubMemberExtensions.IsHeadCoachOrAbove.
-            return response.IsMember && response.Roles.Any(r => r is "HeadCoach" or "Admin" or "Owner");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to check coach role via gRPC for user {UserId}, club {ClubId}",
+            _logger.LogError(ex, "Failed to check club roles via gRPC for user {UserId}, club {ClubId}",
                 userId, clubId);
-            return false;
+            return null;
+        }
+    }
+
+    private async Task<GetMembershipResponse?> GetUnitMembershipAsync(
+        Guid userId, ContextType contextType, Guid contextId)
+    {
+        try
+        {
+            return await _grpcClient.GetMembershipAsync(new GetMembershipRequest
+            {
+                ContextType = contextType.ToString(),
+                ContextId = contextId.ToString(),
+                UserId = userId.ToString()
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Failed to check {ContextType} membership via gRPC for user {UserId}, context {ContextId}",
+                contextType, userId, contextId);
+            return null;
         }
     }
 

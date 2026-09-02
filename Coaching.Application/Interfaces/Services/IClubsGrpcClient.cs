@@ -1,3 +1,5 @@
+using Shared.Enums;
+
 namespace Coaching.Application.Interfaces.Services;
 
 /// <summary>
@@ -42,6 +44,28 @@ public interface IClubsGrpcClient
     /// (HeadCoach, Admin, or Owner) in a club.
     /// </summary>
     Task<bool> IsUserCoachInClubAsync(Guid userId, Guid clubId);
+
+    /// <summary>
+    /// Whether a user's club roles let them give feedback anywhere in that club.
+    /// </summary>
+    Task<bool> CanGiveFeedbackInClubAsync(Guid userId, Guid clubId);
+
+    /// <summary>
+    /// Whether a user's roles on one team or group let them give feedback to its players.
+    /// Reads that unit's own roles only — club standing is a separate question, asked of
+    /// <see cref="CanGiveFeedbackInClubAsync"/> against the club that owns the unit.
+    /// </summary>
+    Task<bool> CanGiveFeedbackInUnitAsync(Guid userId, ContextType contextType, Guid contextId);
+
+    /// <summary>
+    /// Check whether a user belongs to one team or group.
+    /// </summary>
+    Task<bool> IsUserUnitMemberAsync(Guid userId, ContextType contextType, Guid contextId);
+
+    /// <summary>
+    /// The club that owns a team or group. Null when the unit does not exist.
+    /// </summary>
+    Task<Guid?> ResolveClubIdAsync(ContextType contextType, Guid contextId);
 }
 
 /// <summary>

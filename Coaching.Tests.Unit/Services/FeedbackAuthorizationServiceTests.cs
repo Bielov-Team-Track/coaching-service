@@ -4,6 +4,7 @@ using Coaching.Application.Services;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
+using Shared.Enums;
 using Shared.Exceptions;
 using Shared.Testing.Base;
 
@@ -22,6 +23,8 @@ public class FeedbackAuthorizationServiceTests : UnitTestBase
     private static readonly Guid PlayerId = Guid.NewGuid();
     private static readonly Guid ClubId = Guid.NewGuid();
     private static readonly Guid EventId = Guid.NewGuid();
+    private static readonly Guid TeamId = Guid.NewGuid();
+    private static readonly Guid GroupId = Guid.NewGuid();
 
     [SetUp]
     public override void SetUp()
@@ -44,7 +47,7 @@ public class FeedbackAuthorizationServiceTests : UnitTestBase
             .Returns(new EventContext("TrainingSession", "Club", ClubId));
         _eventsClient.IsEventParticipantAsync(EventId, PlayerId)
             .Returns((true, true));
-        _clubsClient.IsUserCoachInClubAsync(CoachId, ClubId)
+        _clubsClient.CanGiveFeedbackInClubAsync(CoachId, ClubId)
             .Returns(true);
 
         // Act
@@ -63,7 +66,7 @@ public class FeedbackAuthorizationServiceTests : UnitTestBase
             .Returns(new EventContext("TrainingSession", "Club", ClubId));
         _eventsClient.IsEventParticipantAsync(EventId, PlayerId)
             .Returns((true, true));
-        _clubsClient.IsUserCoachInClubAsync(CoachId, ClubId)
+        _clubsClient.CanGiveFeedbackInClubAsync(CoachId, ClubId)
             .Returns(false);
 
         // Act
@@ -217,7 +220,7 @@ public class FeedbackAuthorizationServiceTests : UnitTestBase
             .Returns(new EventContext("TrainingSession", "Club", ClubId));
         _eventsClient.IsEventParticipantAsync(EventId, PlayerId)
             .Returns((true, true));
-        _clubsClient.IsUserCoachInClubAsync(CoachId, ClubId)
+        _clubsClient.CanGiveFeedbackInClubAsync(CoachId, ClubId)
             .Returns(true);
 
         // Act
@@ -225,8 +228,91 @@ public class FeedbackAuthorizationServiceTests : UnitTestBase
 
         // Assert
         resolvedClubId.Should().Be(ClubId);
-        await _clubsClient.Received(1).IsUserCoachInClubAsync(CoachId, ClubId);
-        await _clubsClient.DidNotReceive().IsUserCoachInClubAsync(CoachId, differentClubId);
+        await _clubsClient.Received(1).CanGiveFeedbackInClubAsync(CoachId, ClubId);
+        await _clubsClient.DidNotReceive().CanGiveFeedbackInClubAsync(CoachId, differentClubId);
+    }
+
+
+    [Test]
+    public async Task ValidateCreateAsync_EventLinkedTeamEvent_TeamCoach_IsAdmittedWithoutBeingEventAdmin()
+    {
+        // Arrange
+        var request = new CreateFeedbackDto { RecipientUserId = PlayerId, EventId = EventId };
+        _eventsClient.GetEventContextAsync(EventId)
+            .Returns(new EventContext("TrainingSession", "Team", TeamId));
+        _eventsClient.IsEventParticipantAsync(EventId, PlayerId)
+            .Returns((true, true));
+        _eventsClient.IsEventAdminAsync(EventId, CoachId).Returns(false);
+        _clubsClient.ResolveClubIdAsync(ContextType.Team, TeamId).Returns(ClubId);
+        _clubsClient.CanGiveFeedbackInUnitAsync(CoachId, ContextType.Team, TeamId).Returns(true);
+
+        // Act
+        var act = () => _sut.ValidateCreateAsync(request, CoachId);
+
+        // Assert
+        await act.Should().NotThrowAsync();
+    }
+
+    [Test]
+    public async Task ValidateCreateAsync_EventLinkedGroupEvent_GroupCoach_IsAdmittedWithoutBeingEventAdmin()
+    {
+        // Arrange
+        var request = new CreateFeedbackDto { RecipientUserId = PlayerId, EventId = EventId };
+        _eventsClient.GetEventContextAsync(EventId)
+            .Returns(new EventContext("Evaluation", "Group", GroupId));
+        _eventsClient.IsEventParticipantAsync(EventId, PlayerId)
+            .Returns((true, true));
+        _eventsClient.IsEventAdminAsync(EventId, CoachId).Returns(false);
+        _clubsClient.ResolveClubIdAsync(ContextType.Group, GroupId).Returns(ClubId);
+        _clubsClient.CanGiveFeedbackInUnitAsync(CoachId, ContextType.Group, GroupId).Returns(true);
+
+        // Act
+        var act = () => _sut.ValidateCreateAsync(request, CoachId);
+
+        // Assert
+        await act.Should().NotThrowAsync();
+    }
+
+    [Test]
+    public async Task ValidateCreateAsync_EventLinkedTeamEvent_CoachOfTheOwningClub_IsAdmitted()
+    {
+        // Arrange
+        var request = new CreateFeedbackDto { RecipientUserId = PlayerId, EventId = EventId };
+        _eventsClient.GetEventContextAsync(EventId)
+            .Returns(new EventContext("Match", "Team", TeamId));
+        _eventsClient.IsEventParticipantAsync(EventId, PlayerId)
+            .Returns((true, true));
+        _eventsClient.IsEventAdminAsync(EventId, CoachId).Returns(false);
+        _clubsClient.ResolveClubIdAsync(ContextType.Team, TeamId).Returns(ClubId);
+        _clubsClient.CanGiveFeedbackInUnitAsync(CoachId, ContextType.Team, TeamId).Returns(false);
+        _clubsClient.CanGiveFeedbackInClubAsync(CoachId, ClubId).Returns(true);
+
+        // Act
+        var act = () => _sut.ValidateCreateAsync(request, CoachId);
+
+        // Assert
+        await act.Should().NotThrowAsync();
+    }
+
+    [Test]
+    public async Task ValidateCreateAsync_EventLinkedTeamEvent_NeitherUnitCoachNorEventAdmin_ThrowsForbidden()
+    {
+        // Arrange
+        var request = new CreateFeedbackDto { RecipientUserId = PlayerId, EventId = EventId };
+        _eventsClient.GetEventContextAsync(EventId)
+            .Returns(new EventContext("Match", "Team", TeamId));
+        _eventsClient.IsEventParticipantAsync(EventId, PlayerId)
+            .Returns((true, true));
+        _eventsClient.IsEventAdminAsync(EventId, CoachId).Returns(false);
+        _clubsClient.ResolveClubIdAsync(ContextType.Team, TeamId).Returns(ClubId);
+        _clubsClient.CanGiveFeedbackInUnitAsync(CoachId, ContextType.Team, TeamId).Returns(false);
+        _clubsClient.CanGiveFeedbackInClubAsync(CoachId, ClubId).Returns(false);
+
+        // Act
+        var act = () => _sut.ValidateCreateAsync(request, CoachId);
+
+        // Assert
+        await act.Should().ThrowAsync<ForbiddenException>();
     }
 
     #endregion
@@ -238,7 +324,7 @@ public class FeedbackAuthorizationServiceTests : UnitTestBase
     {
         // Arrange
         var request = new CreateFeedbackDto { RecipientUserId = PlayerId, ClubId = ClubId };
-        _clubsClient.IsUserCoachInClubAsync(CoachId, ClubId).Returns(true);
+        _clubsClient.CanGiveFeedbackInClubAsync(CoachId, ClubId).Returns(true);
         _clubsClient.IsUserClubMemberAsync(PlayerId, ClubId).Returns(true);
 
         // Act
@@ -253,7 +339,7 @@ public class FeedbackAuthorizationServiceTests : UnitTestBase
     {
         // Arrange
         var request = new CreateFeedbackDto { RecipientUserId = PlayerId, ClubId = ClubId };
-        _clubsClient.IsUserCoachInClubAsync(CoachId, ClubId).Returns(false);
+        _clubsClient.CanGiveFeedbackInClubAsync(CoachId, ClubId).Returns(false);
 
         // Act
         var act = () => _sut.ValidateCreateAsync(request, CoachId);
@@ -268,7 +354,7 @@ public class FeedbackAuthorizationServiceTests : UnitTestBase
     {
         // Arrange
         var request = new CreateFeedbackDto { RecipientUserId = PlayerId, ClubId = ClubId };
-        _clubsClient.IsUserCoachInClubAsync(CoachId, ClubId).Returns(true);
+        _clubsClient.CanGiveFeedbackInClubAsync(CoachId, ClubId).Returns(true);
         _clubsClient.IsUserClubMemberAsync(PlayerId, ClubId).Returns(false);
 
         // Act
@@ -277,6 +363,183 @@ public class FeedbackAuthorizationServiceTests : UnitTestBase
         // Assert
         await act.Should().ThrowAsync<ForbiddenException>()
             .WithMessage("*recipient*not a member*");
+    }
+
+
+    [Test]
+    public async Task ValidateCreateAsync_StandaloneWithTeam_TeamCoachAndTeamMember_ReturnsOwningClubId()
+    {
+        // Arrange
+        var request = new CreateFeedbackDto
+        {
+            RecipientUserId = PlayerId,
+            ContextType = ContextType.Team,
+            ContextId = TeamId
+        };
+        _clubsClient.ResolveClubIdAsync(ContextType.Team, TeamId).Returns(ClubId);
+        _clubsClient.CanGiveFeedbackInUnitAsync(CoachId, ContextType.Team, TeamId).Returns(true);
+        _clubsClient.IsUserUnitMemberAsync(PlayerId, ContextType.Team, TeamId).Returns(true);
+
+        // Act
+        var resolvedClubId = await _sut.ValidateCreateAsync(request, CoachId);
+
+        // Assert
+        resolvedClubId.Should().Be(ClubId);
+    }
+
+    [Test]
+    public async Task ValidateCreateAsync_StandaloneWithGroup_GroupCoachAndGroupMember_ReturnsOwningClubId()
+    {
+        // Arrange
+        var request = new CreateFeedbackDto
+        {
+            RecipientUserId = PlayerId,
+            ContextType = ContextType.Group,
+            ContextId = GroupId
+        };
+        _clubsClient.ResolveClubIdAsync(ContextType.Group, GroupId).Returns(ClubId);
+        _clubsClient.CanGiveFeedbackInUnitAsync(CoachId, ContextType.Group, GroupId).Returns(true);
+        _clubsClient.IsUserUnitMemberAsync(PlayerId, ContextType.Group, GroupId).Returns(true);
+
+        // Act
+        var resolvedClubId = await _sut.ValidateCreateAsync(request, CoachId);
+
+        // Assert
+        resolvedClubId.Should().Be(ClubId);
+    }
+
+    [Test]
+    public async Task ValidateCreateAsync_StandaloneWithTeam_CoachOfTheOwningClub_IsAdmitted()
+    {
+        // Arrange
+        var request = new CreateFeedbackDto
+        {
+            RecipientUserId = PlayerId,
+            ContextType = ContextType.Team,
+            ContextId = TeamId
+        };
+        _clubsClient.ResolveClubIdAsync(ContextType.Team, TeamId).Returns(ClubId);
+        _clubsClient.CanGiveFeedbackInUnitAsync(CoachId, ContextType.Team, TeamId).Returns(false);
+        _clubsClient.CanGiveFeedbackInClubAsync(CoachId, ClubId).Returns(true);
+        _clubsClient.IsUserUnitMemberAsync(PlayerId, ContextType.Team, TeamId).Returns(true);
+
+        // Act
+        var resolvedClubId = await _sut.ValidateCreateAsync(request, CoachId);
+
+        // Assert
+        resolvedClubId.Should().Be(ClubId);
+    }
+
+    [Test]
+    public async Task ValidateCreateAsync_StandaloneWithTeam_PlayerOfThatTeam_ThrowsForbidden()
+    {
+        // Arrange
+        var request = new CreateFeedbackDto
+        {
+            RecipientUserId = PlayerId,
+            ContextType = ContextType.Team,
+            ContextId = TeamId
+        };
+        _clubsClient.ResolveClubIdAsync(ContextType.Team, TeamId).Returns(ClubId);
+        _clubsClient.CanGiveFeedbackInUnitAsync(CoachId, ContextType.Team, TeamId).Returns(false);
+        _clubsClient.CanGiveFeedbackInClubAsync(CoachId, ClubId).Returns(false);
+
+        // Act
+        var act = () => _sut.ValidateCreateAsync(request, CoachId);
+
+        // Assert
+        await act.Should().ThrowAsync<ForbiddenException>()
+            .WithMessage("*coaches*team or group*");
+    }
+
+    [Test]
+    public async Task ValidateCreateAsync_StandaloneWithTeam_RecipientNotInThatTeam_ThrowsForbidden()
+    {
+        // Arrange
+        var request = new CreateFeedbackDto
+        {
+            RecipientUserId = PlayerId,
+            ContextType = ContextType.Team,
+            ContextId = TeamId
+        };
+        _clubsClient.ResolveClubIdAsync(ContextType.Team, TeamId).Returns(ClubId);
+        _clubsClient.CanGiveFeedbackInUnitAsync(CoachId, ContextType.Team, TeamId).Returns(true);
+        _clubsClient.IsUserUnitMemberAsync(PlayerId, ContextType.Team, TeamId).Returns(false);
+
+        // Act
+        var act = () => _sut.ValidateCreateAsync(request, CoachId);
+
+        // Assert
+        await act.Should().ThrowAsync<ForbiddenException>()
+            .WithMessage("*recipient*not a member*team or group*");
+    }
+
+    [Test]
+    public async Task ValidateCreateAsync_StandaloneWithTeam_UnknownTeam_ThrowsForbidden()
+    {
+        // Arrange
+        var request = new CreateFeedbackDto
+        {
+            RecipientUserId = PlayerId,
+            ContextType = ContextType.Team,
+            ContextId = TeamId
+        };
+        _clubsClient.ResolveClubIdAsync(ContextType.Team, TeamId).Returns((Guid?)null);
+        _clubsClient.CanGiveFeedbackInUnitAsync(CoachId, ContextType.Team, TeamId).Returns(false);
+
+        // Act
+        var act = () => _sut.ValidateCreateAsync(request, CoachId);
+
+        // Assert
+        await act.Should().ThrowAsync<ForbiddenException>();
+        await _clubsClient.DidNotReceive().CanGiveFeedbackInClubAsync(CoachId, Arg.Any<Guid>());
+    }
+
+    [Test]
+    public async Task ValidateCreateAsync_StandaloneWithTeam_IgnoresRequestClubId()
+    {
+        // Arrange
+        var spoofedClubId = Guid.NewGuid();
+        var request = new CreateFeedbackDto
+        {
+            RecipientUserId = PlayerId,
+            ClubId = spoofedClubId,
+            ContextType = ContextType.Team,
+            ContextId = TeamId
+        };
+        _clubsClient.ResolveClubIdAsync(ContextType.Team, TeamId).Returns(ClubId);
+        _clubsClient.CanGiveFeedbackInUnitAsync(CoachId, ContextType.Team, TeamId).Returns(true);
+        _clubsClient.IsUserUnitMemberAsync(PlayerId, ContextType.Team, TeamId).Returns(true);
+
+        // Act
+        var resolvedClubId = await _sut.ValidateCreateAsync(request, CoachId);
+
+        // Assert
+        resolvedClubId.Should().Be(ClubId);
+        await _clubsClient.DidNotReceive().CanGiveFeedbackInClubAsync(CoachId, spoofedClubId);
+    }
+
+    [Test]
+    public async Task ValidateCreateAsync_StandaloneWithClubContextType_UsesTheClubRule()
+    {
+        // Arrange
+        var request = new CreateFeedbackDto
+        {
+            RecipientUserId = PlayerId,
+            ClubId = ClubId,
+            ContextType = ContextType.Club,
+            ContextId = ClubId
+        };
+        _clubsClient.CanGiveFeedbackInClubAsync(CoachId, ClubId).Returns(true);
+        _clubsClient.IsUserClubMemberAsync(PlayerId, ClubId).Returns(true);
+
+        // Act
+        var resolvedClubId = await _sut.ValidateCreateAsync(request, CoachId);
+
+        // Assert
+        resolvedClubId.Should().Be(ClubId);
+        await _clubsClient.DidNotReceive()
+            .CanGiveFeedbackInUnitAsync(CoachId, Arg.Any<ContextType>(), Arg.Any<Guid>());
     }
 
     #endregion
@@ -320,7 +583,7 @@ public class FeedbackAuthorizationServiceTests : UnitTestBase
     {
         // Arrange
         var request = new CreateFeedbackDto { RecipientUserId = PlayerId, ClubId = ClubId };
-        _clubsClient.IsUserCoachInClubAsync(CoachId, ClubId).Returns(true);
+        _clubsClient.CanGiveFeedbackInClubAsync(CoachId, ClubId).Returns(true);
         _clubsClient.IsUserClubMemberAsync(PlayerId, ClubId).Returns(true);
 
         // Act
@@ -335,7 +598,7 @@ public class FeedbackAuthorizationServiceTests : UnitTestBase
     {
         // Arrange
         var request = new CreateFeedbackDto { RecipientUserId = PlayerId, ClubId = ClubId };
-        _clubsClient.IsUserCoachInClubAsync(CoachId, ClubId).Returns(false);
+        _clubsClient.CanGiveFeedbackInClubAsync(CoachId, ClubId).Returns(false);
 
         // Act
         var canCreate = await _sut.CanCreateAsync(request, CoachId);
