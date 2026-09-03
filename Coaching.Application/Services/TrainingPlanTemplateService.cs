@@ -1,4 +1,5 @@
 using AutoMapper;
+using Coaching.Application.Analytics;
 using Coaching.Application.DTOs.Templates;
 using Coaching.Application.Interfaces.Repositories;
 using Coaching.Application.Interfaces.Services;
@@ -14,6 +15,7 @@ using Shared.Enums;
 using Shared.Exceptions;
 using Shared.Messaging.Contracts.Events.Coaching;
 using Shared.Models;
+using Shared.Services.Analytics;
 
 namespace Coaching.Application.Services;
 
@@ -35,6 +37,7 @@ public class TrainingPlanService : ITrainingPlanService
     private readonly IPublishEndpoint _publishEndpoint;
     private readonly IMapper _mapper;
     private readonly ILogger<TrainingPlanService> _logger;
+    private readonly IAnalyticsCapture _analytics;
 
     public TrainingPlanService(
         ITrainingPlanRepository planRepository,
@@ -52,7 +55,8 @@ public class TrainingPlanService : ITrainingPlanService
         IPlanCoachService planCoachService,
         IPublishEndpoint publishEndpoint,
         IMapper mapper,
-        ILogger<TrainingPlanService> logger)
+        ILogger<TrainingPlanService> logger,
+        IAnalyticsCapture analytics)
     {
         _planRepository = planRepository;
         _sectionRepository = sectionRepository;
@@ -70,6 +74,7 @@ public class TrainingPlanService : ITrainingPlanService
         _publishEndpoint = publishEndpoint;
         _mapper = mapper;
         _logger = logger;
+        _analytics = analytics;
     }
 
     // =========================================================================
@@ -145,6 +150,9 @@ public class TrainingPlanService : ITrainingPlanService
         var dto = _mapper.Map<TrainingPlanDetailDto>(created);
         await AttachDialValuesAsync(dto);
         await EnrichWithClubInfoAsync([dto]);
+
+        _analytics.CaptureTrainingPlanCreated(plan, userId, created?.Items.Count ?? 0);
+
         return dto;
     }
 
@@ -369,6 +377,8 @@ public class TrainingPlanService : ITrainingPlanService
         var dto = _mapper.Map<TrainingPlanDetailDto>(created);
         await AttachDialValuesAsync(dto);
         await EnrichWithClubInfoAsync([dto]);
+
+        _analytics.CaptureTrainingPlanCreated(plan, userId, created?.Items.Count ?? 0);
 
         // Publish event so events-service can update its summary
         if (created != null)

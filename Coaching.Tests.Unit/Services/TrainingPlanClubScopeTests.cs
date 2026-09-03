@@ -10,6 +10,7 @@ using MassTransit;
 using Microsoft.Extensions.Logging;
 using MockQueryable;
 using Shared.DataAccess.Repositories.Interfaces;
+using Shared.Services.Analytics;
 using NSubstitute;
 
 namespace Coaching.Tests.Unit.Services;
@@ -60,7 +61,8 @@ public class TrainingPlanClubScopeTests
             Substitute.For<IPlanCoachService>(),
             Substitute.For<IPublishEndpoint>(),
             _mapper,
-            Substitute.For<ILogger<TrainingPlanService>>());
+            Substitute.For<ILogger<TrainingPlanService>>(),
+            Substitute.For<IAnalyticsCapture>());
     }
 
     private static TrainingPlan BuildPublicClubPlan(Guid clubId) => new()

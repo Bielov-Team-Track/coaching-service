@@ -6,6 +6,7 @@ using Coaching.Domain.Models.Templates;
 using FluentAssertions;
 using MockQueryable;
 using NSubstitute;
+using Shared.Services.Analytics;
 using Shared.Testing.Base;
 
 namespace Coaching.Tests.Unit.Services;
@@ -44,7 +45,8 @@ public class RunStationTests : UnitTestBase
             _planRepository,
             Substitute.For<IRunBroadcaster>(),
             Substitute.For<IEventsGrpcClient>(),
-            TimeProvider);
+            TimeProvider,
+            Substitute.For<IAnalyticsCapture>());
     }
 
     /// <summary>

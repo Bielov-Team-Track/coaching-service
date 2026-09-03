@@ -13,6 +13,7 @@ using NSubstitute;
 using Shared.Enums;
 using Shared.Exceptions;
 using Shared.Options;
+using Shared.Services.Analytics;
 using Shared.Services.FileStorage.Intefaces;
 
 namespace Coaching.Tests.Unit.Services;
@@ -47,7 +48,8 @@ public class DrillCrudServiceTests
             Options.Create(new S3Settings { Bucket = "test-bucket", PublicBaseUrl = "https://cdn.test" }),
             _mapper,
             Substitute.For<ILogger<DrillService>>(),
-            Substitute.For<IDrillDialReconciler>());
+            Substitute.For<IDrillDialReconciler>(),
+            Substitute.For<IAnalyticsCapture>());
     }
 
     [Test]

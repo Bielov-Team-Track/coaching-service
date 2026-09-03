@@ -1,4 +1,5 @@
 using AutoMapper;
+using Coaching.Application.Analytics;
 using Coaching.Application.DTOs.Evaluation;
 using Coaching.Application.Interfaces.Repositories;
 using Coaching.Application.Interfaces.Services;
@@ -6,6 +7,7 @@ using Coaching.Domain.Enums;
 using Coaching.Domain.Models.Evaluation;
 using Shared.Enums;
 using Shared.Exceptions;
+using Shared.Services.Analytics;
 
 namespace Coaching.Application.Services;
 
@@ -13,6 +15,7 @@ public class EvaluationSessionService(
     IEvaluationSessionRepository sessionRepository,
     IEvaluationParticipantRepository participantRepository,
     IEvaluationPlanRepository planRepository,
+    IAnalyticsCapture analytics,
     IMapper mapper) : IEvaluationSessionService
 {
     public async Task<EvaluationSessionDto> CreateAsync(CreateEvaluationSessionDto request, Guid coachUserId)
@@ -41,6 +44,15 @@ public class EvaluationSessionService(
 
         sessionRepository.Add(session);
         await sessionRepository.SaveChangesAsync();
+
+        // No participant count: players arrive on a later call, so every session is created empty.
+        analytics.Capture(coachUserId, AnalyticsEventNames.EvaluationSessionCreated, new Dictionary<string, object?>
+        {
+            ["session_id"] = session.Id,
+            ["club_id"] = session.ClubId,
+            ["event_id"] = session.EventId,
+            ["has_plan"] = session.EvaluationPlanId.HasValue
+        });
 
         return await GetByIdAsync(session.Id) ?? throw new Exception("Failed to retrieve created session");
     }

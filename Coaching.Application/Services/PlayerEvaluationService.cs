@@ -1,4 +1,5 @@
 using AutoMapper;
+using Coaching.Application.Analytics;
 using Coaching.Application.DTOs.Evaluation;
 using Coaching.Application.Interfaces.Repositories;
 using Coaching.Application.Interfaces.Services;
@@ -7,6 +8,7 @@ using Coaching.Domain.Models.Evaluation;
 using Shared.DataAccess.Repositories.Interfaces;
 using Shared.Enums;
 using Shared.Exceptions;
+using Shared.Services.Analytics;
 
 namespace Coaching.Application.Services;
 
@@ -19,6 +21,7 @@ public class PlayerEvaluationService(
     IEvaluationParticipantRepository participantRepository,
     IClubsGrpcClient clubsGrpcClient,
     IScoreCalculationService scoreCalculationService,
+    IAnalyticsCapture analytics,
     IMapper mapper) : IPlayerEvaluationService
 {
     public async Task<PlayerEvaluationDto> CreateAsync(Guid sessionId, CreatePlayerEvaluationDto request, Guid coachUserId)
@@ -150,6 +153,8 @@ public class PlayerEvaluationService(
         }
         await metricScoreRepository.SaveChangesAsync();
 
+        analytics.CapturePlayerEvaluationScored(session.Id, evaluationId, userId, request.Scores.Count);
+
         // Recalculate skill scores
         await RecalculateSkillScores(evaluationId, plan, session.ClubId);
 
@@ -188,6 +193,8 @@ public class PlayerEvaluationService(
         evaluation.SharedWithPlayer = share;
         evaluationRepository.Update(evaluation);
         await evaluationRepository.SaveChangesAsync();
+
+        analytics.CapturePlayerEvaluationShared(evaluationId, session.Id, userId, share);
 
         return await GetByIdAsync(evaluationId, userId) ?? throw new Exception("Failed to retrieve evaluation");
     }
