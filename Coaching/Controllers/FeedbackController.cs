@@ -3,6 +3,7 @@ using Coaching.Application.DTOs.Feedback;
 using Coaching.Application.Interfaces.Services;
 using Microsoft.AspNetCore.Mvc;
 using Shared.DataAccess.Providers.Interfaces;
+using Shared.Enums;
 
 namespace Coaching.Controllers;
 
@@ -43,12 +44,18 @@ public class FeedbackController : Shared.Microservices.Controllers.BaseApiContro
     /// <summary>
     /// Lightweight authorization check: can the current user create feedback?
     /// Returns only a boolean — denial reasons are logged server-side.
+    ///
+    /// A team or group must be named through contextType/contextId when the answer depends on it:
+    /// a coach of one team holds that role on the team, so a club-only question answers no for
+    /// them and their "Give feedback" button never appears.
     /// </summary>
     [HttpGet("feedback/can-create")]
     public async Task<IActionResult> CanCreate(
         [FromQuery] Guid recipientUserId,
         [FromQuery] Guid? eventId = null,
-        [FromQuery] Guid? clubId = null)
+        [FromQuery] Guid? clubId = null,
+        [FromQuery] ContextType? contextType = null,
+        [FromQuery] Guid? contextId = null)
     {
         CheckIsUserLoggedIn();
 
@@ -56,7 +63,9 @@ public class FeedbackController : Shared.Microservices.Controllers.BaseApiContro
         {
             RecipientUserId = recipientUserId,
             EventId = eventId,
-            ClubId = clubId
+            ClubId = clubId,
+            ContextType = contextType,
+            ContextId = contextId
         };
 
         var canCreate = await _authorizationService.CanCreateAsync(request, JwtPayload.UserId);

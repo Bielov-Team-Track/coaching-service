@@ -10,9 +10,9 @@ public interface IFeedbackAuthorizationService
 {
     /// <summary>
     /// Validates the user can create feedback for the given request.
-    /// Returns the resolved ClubId (from event context for event-linked feedback,
-    /// or from request for standalone feedback) so FeedbackService can use it
-    /// without making a duplicate gRPC call.
+    /// Returns the resolved ClubId — from the event's context when the feedback is event-linked,
+    /// from the owning club when a team or group is named, and from the request when a club is
+    /// all it carries — so FeedbackService can use it without making a duplicate gRPC call.
     /// </summary>
     Task<Guid?> ValidateCreateAsync(CreateFeedbackDto request, Guid userId);
 

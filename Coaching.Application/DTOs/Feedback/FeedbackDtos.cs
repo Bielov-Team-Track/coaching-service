@@ -1,4 +1,5 @@
 using Coaching.Domain.Enums;
+using Shared.Enums;
 
 namespace Coaching.Application.DTOs.Feedback;
 
@@ -77,6 +78,18 @@ public record CreateFeedbackDto
     public Guid RecipientUserId { get; set; }
     public Guid? EventId { get; set; }
     public Guid? ClubId { get; set; }
+
+    /// <summary>
+    /// The team or group the feedback is being given in, when it is not tied to an event. A club
+    /// alone cannot answer whether a team's coach may write to that team's players, because the
+    /// coaching role lives on the unit and not on the club row.
+    ///
+    /// Both fields travel together and only Team and Group mean anything here; anything else
+    /// falls through to <see cref="ClubId"/>. The club is resolved from the unit rather than read
+    /// from the request, so the pair cannot be used to claim a club the unit does not belong to.
+    /// </summary>
+    public ContextType? ContextType { get; set; }
+    public Guid? ContextId { get; set; }
     public string? Content { get; set; }
     public string? Comment { get; set; }
     public bool SharedWithPlayer { get; set; }
