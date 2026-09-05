@@ -1,5 +1,6 @@
 using System.Text.Json;
 using AutoMapper;
+using Coaching.Application.Analytics;
 using Coaching.Application.DTOs.Drills;
 using Coaching.Application.Interfaces.Repositories;
 using Coaching.Application.Interfaces.Services;
@@ -13,6 +14,7 @@ using Shared.Enums;
 using Shared.Exceptions;
 using Shared.DTOs;
 using Shared.Options;
+using Shared.Services.Analytics;
 using Shared.Services.FileStorage.Intefaces;
 
 namespace Coaching.Application.Services;
@@ -30,6 +32,7 @@ public class DrillService : IDrillService
     private readonly IMapper _mapper;
     private readonly ILogger<DrillService> _logger;
     private readonly IDrillDialReconciler _dialReconciler;
+    private readonly IAnalyticsCapture _analytics;
 
     /// <summary>
     /// The most rows one import request may carry. Public because the ceiling is part of the
@@ -48,7 +51,8 @@ public class DrillService : IDrillService
         IOptions<S3Settings> s3Settings,
         IMapper mapper,
         ILogger<DrillService> logger,
-        IDrillDialReconciler dialReconciler)
+        IDrillDialReconciler dialReconciler,
+        IAnalyticsCapture analytics)
     {
         _drillRepository = drillRepository;
         _likeRepository = likeRepository;
@@ -61,6 +65,7 @@ public class DrillService : IDrillService
         _mapper = mapper;
         _logger = logger;
         _dialReconciler = dialReconciler;
+        _analytics = analytics;
     }
 
     public async Task<PagedResponse<DrillDto>> GetByFilterAsync(DrillFilterRequest filter, Guid? userId = null)
@@ -234,6 +239,17 @@ public class DrillService : IDrillService
         var createdDrill = await _drillRepository.GetByIdWithDetailsAsync(drill.Id);
         var dto = _mapper.Map<DrillDto>(createdDrill);
         await EnrichWithClubInfoAsync([dto]);
+
+        _analytics.Capture(userId, AnalyticsEventNames.DrillCreated, new Dictionary<string, object?>
+        {
+            ["drill_id"] = dto.Id,
+            ["club_id"] = dto.ClubId,
+            ["visibility"] = dto.Visibility,
+            ["category"] = dto.Category,
+            ["has_video"] = !string.IsNullOrWhiteSpace(dto.VideoUrl),
+            ["dial_count"] = dto.Dials.Count
+        });
+
         return dto;
     }
 
@@ -279,7 +295,20 @@ public class DrillService : IDrillService
             await _drillRepository.SaveChangesAsync();
         }
 
-        return new ImportDrillsResultDto(toCreate.Count, results.Count - toCreate.Count, results);
+        var failed = results.Count - toCreate.Count;
+
+        // One event for the batch, not one per drill: the coach made a single decision, and a
+        // row each would drown the drills written by hand.
+        _analytics.Capture(userId, AnalyticsEventNames.DrillImported, new Dictionary<string, object?>
+        {
+            ["row_count"] = results.Count,
+            ["imported_count"] = toCreate.Count,
+            ["failed_count"] = failed,
+            ["club_id"] = request.ClubId,
+            ["visibility"] = request.Visibility
+        });
+
+        return new ImportDrillsResultDto(toCreate.Count, failed, results);
     }
 
     private static string? ValidateImportRow(ImportDrillRowDto row)
@@ -462,6 +491,15 @@ public class DrillService : IDrillService
         var updatedDrill = await _drillRepository.GetByIdWithDetailsAsync(drill.Id);
         var dto = _mapper.Map<DrillDto>(updatedDrill);
         await EnrichWithClubInfoAsync([dto]);
+
+        _analytics.Capture(userId, AnalyticsEventNames.DrillUpdated, new Dictionary<string, object?>
+        {
+            ["drill_id"] = dto.Id,
+            ["club_id"] = dto.ClubId,
+            ["visibility"] = dto.Visibility,
+            ["dial_count"] = dto.Dials.Count
+        });
+
         return dto;
     }
 
@@ -547,6 +585,8 @@ public class DrillService : IDrillService
 
         await _drillRepository.SaveChangesAsync();
 
+        _analytics.CaptureDrillSaved(drillId, userId, DrillSaveKind.Like, isOn: true);
+
         return new DrillLikeStatusDto
         {
             IsLiked = true,
@@ -576,6 +616,8 @@ public class DrillService : IDrillService
         _drillRepository.Update(drill);
 
         await _drillRepository.SaveChangesAsync();
+
+        _analytics.CaptureDrillSaved(drillId, userId, DrillSaveKind.Like, isOn: false);
 
         return new DrillLikeStatusDto
         {
@@ -624,6 +666,8 @@ public class DrillService : IDrillService
         _bookmarkRepository.Add(bookmark);
         await _bookmarkRepository.SaveChangesAsync();
 
+        _analytics.CaptureDrillSaved(drillId, userId, DrillSaveKind.Bookmark, isOn: true);
+
         return new DrillBookmarkStatusDto { IsBookmarked = true };
     }
 
@@ -637,6 +681,8 @@ public class DrillService : IDrillService
 
         _bookmarkRepository.Delete(existingBookmark);
         await _bookmarkRepository.SaveChangesAsync();
+
+        _analytics.CaptureDrillSaved(drillId, userId, DrillSaveKind.Bookmark, isOn: false);
 
         return new DrillBookmarkStatusDto { IsBookmarked = false };
     }

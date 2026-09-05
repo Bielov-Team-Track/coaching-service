@@ -16,6 +16,7 @@ using Coaching.Application.Consumers;
 using Shared.Messaging.Consumers;
 using Shared.Messaging.Extensions;
 using Shared.Options;
+using Shared.Services.Analytics;
 using Shared.Services.Extensions;
 using System.Text;
 using Shared.Middleware;
@@ -142,6 +143,7 @@ namespace Coaching
             services.Configure<S3Settings>(Configuration.GetSection("S3"));
             services.AddDefaultAWSOptions(Configuration.GetAWSOptions());
             services.AddSharedServices();
+            services.AddPostHogAnalytics(Configuration, "coaching-service");
 
             // Caching
             services.AddMemoryCache();

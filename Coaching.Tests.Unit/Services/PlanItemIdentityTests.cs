@@ -13,6 +13,7 @@ using MockQueryable;
 using NSubstitute;
 using Shared.DataAccess.Repositories.Interfaces;
 using Shared.Exceptions;
+using Shared.Services.Analytics;
 using Shared.Testing.Base;
 
 namespace Coaching.Tests.Unit.Services;
@@ -108,7 +109,8 @@ public class PlanItemIdentityTests : UnitTestBase
             Substitute.For<IPlanCoachService>(),
             Substitute.For<IPublishEndpoint>(),
             mapper,
-            Substitute.For<ILogger<TrainingPlanService>>());
+            Substitute.For<ILogger<TrainingPlanService>>(),
+            Substitute.For<IAnalyticsCapture>());
     }
 
     private void SeedPlan()

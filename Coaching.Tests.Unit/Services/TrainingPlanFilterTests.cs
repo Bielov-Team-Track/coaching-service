@@ -11,6 +11,7 @@ using MassTransit;
 using Microsoft.Extensions.Logging;
 using MockQueryable;
 using Shared.DataAccess.Repositories.Interfaces;
+using Shared.Services.Analytics;
 using NSubstitute;
 
 namespace Coaching.Tests.Unit.Services;
@@ -59,7 +60,8 @@ public class TrainingPlanFilterTests
             Substitute.For<IPlanCoachService>(),
             Substitute.For<IPublishEndpoint>(),
             mapper,
-            Substitute.For<ILogger<TrainingPlanService>>());
+            Substitute.For<ILogger<TrainingPlanService>>(),
+            Substitute.For<IAnalyticsCapture>());
     }
 
     private static TrainingPlan BuildPlan(string name, int duration = 60, params DrillSkill[] skills) => new()

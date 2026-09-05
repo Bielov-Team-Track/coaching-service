@@ -10,6 +10,7 @@ using MockQueryable;
 using Shared.DataAccess.Repositories.Interfaces;
 using NSubstitute;
 using Shared.Messaging.Contracts.Events.Coaching;
+using Shared.Services.Analytics;
 
 namespace Coaching.Tests.Unit.Services;
 
@@ -53,7 +54,8 @@ public class TrainingPlanDeleteOutboxTests
             Substitute.For<IPlanCoachService>(),
             _publishEndpoint,
             Substitute.For<AutoMapper.IMapper>(),
-            Substitute.For<ILogger<TrainingPlanService>>());
+            Substitute.For<ILogger<TrainingPlanService>>(),
+            Substitute.For<IAnalyticsCapture>());
     }
 
     private TrainingPlan GivenPlan(PlanType type, Guid? eventId)

@@ -13,6 +13,7 @@ using MockQueryable;
 using MockQueryable.NSubstitute;
 using NSubstitute;
 using Shared.Exceptions;
+using Shared.Services.Analytics;
 using Shared.Testing.Base;
 
 namespace Coaching.Tests.Unit.Services;
@@ -68,7 +69,8 @@ public class PlanEditAccessTests : UnitTestBase
             Substitute.For<IPlanCoachService>(),
             Substitute.For<IPublishEndpoint>(),
             mapper,
-            Substitute.For<ILogger<TrainingPlanService>>());
+            Substitute.For<ILogger<TrainingPlanService>>(),
+            Substitute.For<IAnalyticsCapture>());
     }
 
     private static TrainingPlan EventPlan() => new()

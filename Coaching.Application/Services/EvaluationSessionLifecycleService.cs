@@ -1,4 +1,5 @@
 using AutoMapper;
+using Coaching.Application.Analytics;
 using Coaching.Application.DTOs.Evaluation;
 using Coaching.Application.Interfaces.Repositories;
 using Coaching.Application.Interfaces.Services;
@@ -7,6 +8,7 @@ using Coaching.Domain.Models.Evaluation;
 using Shared.DataAccess.Repositories.Interfaces;
 using Shared.Enums;
 using Shared.Exceptions;
+using Shared.Services.Analytics;
 
 namespace Coaching.Application.Services;
 
@@ -21,6 +23,7 @@ public class EvaluationSessionLifecycleService(
     IRepository<PlayerSkillScore> skillScoreRepository,
     IClubsGrpcClient clubsGrpcClient,
     IScoreCalculationService scoreCalculationService,
+    IAnalyticsCapture analytics,
     IMapper mapper) : IEvaluationSessionLifecycleService
 {
     public async Task<EvaluationSessionDto> StartSessionAsync(Guid sessionId, Guid userId)
@@ -120,6 +123,13 @@ public class EvaluationSessionLifecycleService(
         sessionRepository.Update(session);
         await sessionRepository.SaveChangesAsync();
 
+        analytics.Capture(userId, AnalyticsEventNames.EvaluationSessionStarted, new Dictionary<string, object?>
+        {
+            ["session_id"] = sessionId,
+            ["participant_count"] = participants.Count,
+            ["exercise_count"] = plan.Items.Count
+        });
+
         return mapper.Map<EvaluationSessionDto>(
             await sessionRepository.GetByIdWithParticipantsAsync(sessionId));
     }
@@ -173,13 +183,21 @@ public class EvaluationSessionLifecycleService(
             throw new BadRequestException("Evaluation plan not found", ErrorCodeEnum.ValidationError);
 
         // Calculate final results for each participant
-        await CalculateFinalResults(session, plan);
+        var (evaluatedCount, scoredCount) = await CalculateFinalResults(session, plan);
 
         session.Status = EvaluationSessionStatus.Completed;
         session.CompletedAt = DateTime.UtcNow;
 
         sessionRepository.Update(session);
         await sessionRepository.SaveChangesAsync();
+
+        analytics.Capture(userId, AnalyticsEventNames.EvaluationSessionCompleted, new Dictionary<string, object?>
+        {
+            ["session_id"] = sessionId,
+            ["evaluated_count"] = evaluatedCount,
+            ["scored_count"] = scoredCount,
+            ["duration_seconds"] = (int)((session.CompletedAt - session.StartedAt)?.TotalSeconds ?? 0)
+        });
 
         return mapper.Map<EvaluationSessionDto>(
             await sessionRepository.GetByIdWithParticipantsAsync(sessionId));
@@ -304,9 +322,15 @@ public class EvaluationSessionLifecycleService(
         evaluation.SharedWithPlayer = dto.SharedWithPlayer;
         evaluationRepository.Update(evaluation);
         await evaluationRepository.SaveChangesAsync();
+
+        analytics.CapturePlayerEvaluationShared(evaluationId, sessionId, userId, dto.SharedWithPlayer);
     }
 
-    private async Task CalculateFinalResults(EvaluationSession session, EvaluationPlan plan)
+    /// <summary>
+    /// Returns how many players were given a result and how many player-by-exercise cells were
+    /// actually scored — both already read here, so the completion event costs no extra query.
+    /// </summary>
+    private async Task<(int Evaluated, int Scored)> CalculateFinalResults(EvaluationSession session, EvaluationPlan plan)
     {
         var participants = (await participantRepository.GetBySessionIdAsync(session.Id)).ToList();
         var allScores = (await exerciseScoreRepository.GetBySessionIdAsync(session.Id)).ToList();
@@ -414,6 +438,8 @@ public class EvaluationSessionLifecycleService(
             }
             await skillScoreRepository.SaveChangesAsync();
         }
+
+        return (participants.Count, allScores.Count(s => s.Status == EvaluationScoreStatus.Scored));
     }
 
     private async Task<EvaluationSession> GetSessionAndValidateOwnership(Guid sessionId, Guid userId)

@@ -8,6 +8,7 @@ using FluentAssertions;
 using MockQueryable;
 using NSubstitute;
 using Shared.Exceptions;
+using Shared.Services.Analytics;
 using Shared.Testing.Base;
 
 namespace Coaching.Tests.Unit.Services;
@@ -46,7 +47,8 @@ public class RunServiceTests : UnitTestBase
             _planRepository,
             _broadcaster,
             _eventsGrpcClient,
-            TimeProvider);
+            TimeProvider,
+            Substitute.For<IAnalyticsCapture>());
     }
 
     // Two-item instance plan created by CreatorId, attached to EventId.
