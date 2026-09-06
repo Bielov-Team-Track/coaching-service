@@ -1,4 +1,5 @@
 using AutoMapper;
+using Coaching.Application.Analytics;
 using Coaching.Application.DTOs.Evaluation;
 using Coaching.Application.Interfaces.Repositories;
 using Coaching.Application.Interfaces.Services;
@@ -7,6 +8,7 @@ using Coaching.Domain.Models.Evaluation;
 using Shared.DataAccess.Repositories.Interfaces;
 using Shared.Enums;
 using Shared.Exceptions;
+using Shared.Services.Analytics;
 
 namespace Coaching.Application.Services;
 
@@ -18,6 +20,7 @@ public class EvaluationScoringService(
     IPlayerEvaluationRepository evaluationRepository,
     IRepository<PlayerMetricScore> metricScoreRepository,
     IScoreCalculationService scoreCalculationService,
+    IAnalyticsCapture analytics,
     IMapper mapper) : IEvaluationScoringService
 {
     public async Task<PlayerExerciseScoreDto> SubmitExerciseScoresAsync(Guid sessionId, SubmitExerciseScoresDto dto, Guid userId)
@@ -118,6 +121,8 @@ public class EvaluationScoringService(
 
         exerciseScoreRepository.Update(exerciseScore);
         await exerciseScoreRepository.SaveChangesAsync();
+
+        analytics.CapturePlayerEvaluationScored(sessionId, evaluation.Id, userId, dto.Scores.Count);
 
         // Reload and return
         var updatedScore = await exerciseScoreRepository.GetBySessionPlayerExerciseAsync(

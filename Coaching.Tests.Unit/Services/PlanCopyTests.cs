@@ -11,6 +11,7 @@ using MassTransit;
 using Microsoft.Extensions.Logging;
 using MockQueryable;
 using NSubstitute;
+using Shared.Services.Analytics;
 using Shared.Testing.Base;
 
 namespace Coaching.Tests.Unit.Services;
@@ -74,7 +75,8 @@ public class PlanCopyTests : UnitTestBase
             Substitute.For<IPlanCoachService>(),
             Substitute.For<IPublishEndpoint>(),
             mapper,
-            Substitute.For<ILogger<TrainingPlanService>>());
+            Substitute.For<ILogger<TrainingPlanService>>(),
+            Substitute.For<IAnalyticsCapture>());
     }
 
     /// <summary>

@@ -1,3 +1,4 @@
+using Coaching.Application.Analytics;
 using Coaching.Application.DTOs.Templates;
 using Coaching.Application.Interfaces.Repositories;
 using Coaching.Application.Interfaces.Services;
@@ -5,6 +6,7 @@ using Coaching.Domain.Enums;
 using Coaching.Domain.Models.Templates;
 using Microsoft.EntityFrameworkCore;
 using Shared.Exceptions;
+using Shared.Services.Analytics;
 
 namespace Coaching.Application.Services;
 
@@ -19,6 +21,7 @@ public class RunService : IRunService
     private readonly IRunBroadcaster _broadcaster;
     private readonly IEventsGrpcClient _eventsGrpcClient;
     private readonly TimeProvider _timeProvider;
+    private readonly IAnalyticsCapture _analytics;
 
     public RunService(
         ITrainingPlanRunRepository runRepository,
@@ -27,7 +30,8 @@ public class RunService : IRunService
         ITrainingPlanRepository planRepository,
         IRunBroadcaster broadcaster,
         IEventsGrpcClient eventsGrpcClient,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IAnalyticsCapture analytics)
     {
         _runRepository = runRepository;
         _runItemRepository = runItemRepository;
@@ -36,6 +40,7 @@ public class RunService : IRunService
         _broadcaster = broadcaster;
         _eventsGrpcClient = eventsGrpcClient;
         _timeProvider = timeProvider;
+        _analytics = analytics;
     }
 
     public async Task<RunDto?> GetByEventIdAsync(Guid eventId, Guid requestingUserId)
@@ -165,6 +170,16 @@ public class RunService : IRunService
         run.CurrentItemPausedElapsedSeconds = 0;
 
         await _runRepository.SaveChangesAsync();
+
+        // A restart is a start: the coach is running the practice again, and the run rows were
+        // just reset to the plan as it stands now.
+        _analytics.Capture(requestingUserId, AnalyticsEventNames.PracticeRunStarted, new Dictionary<string, object?>
+        {
+            ["event_id"] = eventId,
+            ["plan_id"] = plan.Id,
+            ["item_count"] = run.Items.Count
+        });
+
         return await BroadcastAsync(eventId, run, requestingUserId == plan.CreatedByUserId);
     }
 
@@ -282,6 +297,12 @@ public class RunService : IRunService
         }
 
         await _runRepository.SaveChangesAsync();
+
+        // Advancing off the end of the plan is the run finishing, and that is the same fact the
+        // finish button records — so it is the same event, once, from whichever path got there.
+        if (nextItem == null)
+            _analytics.CapturePracticeRunCompleted(run, requestingUserId);
+
         return await BroadcastAsync(eventId, run, isCreator);
     }
 
@@ -299,6 +320,9 @@ public class RunService : IRunService
         run.CompletedAtUtc = Now();
 
         await _runRepository.SaveChangesAsync();
+
+        _analytics.CapturePracticeRunCompleted(run, requestingUserId);
+
         return await BroadcastAsync(eventId, run, isCreator);
     }
 

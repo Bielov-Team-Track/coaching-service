@@ -26,14 +26,22 @@ public class FeedbackRepository : BaseRepository<Feedback>, IFeedbackRepository
             .FirstOrDefaultAsync(f => f.Id == id && !f.IsDeleted);
     }
 
+    /// <summary>
+    /// Split, like the detail read: improvement points and attachments are two collections, and
+    /// one statement carrying both returns their product — every point against every attachment.
+    /// Id breaks ties in the ordering because a split query pages each collection separately, and
+    /// CreatedAt alone does not decide which rows a page holds when two share a timestamp.
+    /// </summary>
     public async Task<IEnumerable<Feedback>> GetByRecipientIdAsync(Guid userId, int page = 1, int pageSize = 20)
     {
         return await _dbSet
+            .AsSplitQuery()
             .Include(f => f.ImprovementPoints.Where(ip => !ip.IsDeleted).OrderBy(ip => ip.Order))
             .Include(f => f.Media.Where(m => !m.IsDeleted).OrderBy(m => m.Order))
             .Include(f => f.Praise)
             .Where(f => f.RecipientUserId == userId && f.SharedWithPlayer && !f.IsDeleted)
             .OrderByDescending(f => f.CreatedAt)
+            .ThenBy(f => f.Id)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync();
@@ -42,11 +50,13 @@ public class FeedbackRepository : BaseRepository<Feedback>, IFeedbackRepository
     public async Task<IEnumerable<Feedback>> GetByCoachIdAsync(Guid userId, int page = 1, int pageSize = 20)
     {
         return await _dbSet
+            .AsSplitQuery()
             .Include(f => f.ImprovementPoints.Where(ip => !ip.IsDeleted).OrderBy(ip => ip.Order))
             .Include(f => f.Media.Where(m => !m.IsDeleted).OrderBy(m => m.Order))
             .Include(f => f.Praise)
             .Where(f => f.CoachUserId == userId && !f.IsDeleted)
             .OrderByDescending(f => f.CreatedAt)
+            .ThenBy(f => f.Id)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync();
@@ -55,11 +65,13 @@ public class FeedbackRepository : BaseRepository<Feedback>, IFeedbackRepository
     public async Task<IEnumerable<Feedback>> GetByEventIdAsync(Guid eventId)
     {
         return await _dbSet
+            .AsSplitQuery()
             .Include(f => f.ImprovementPoints.Where(ip => !ip.IsDeleted).OrderBy(ip => ip.Order))
             .Include(f => f.Media.Where(m => !m.IsDeleted).OrderBy(m => m.Order))
             .Include(f => f.Praise)
             .Where(f => f.EventId == eventId && !f.IsDeleted)
             .OrderByDescending(f => f.CreatedAt)
+            .ThenBy(f => f.Id)
             .ToListAsync();
     }
 

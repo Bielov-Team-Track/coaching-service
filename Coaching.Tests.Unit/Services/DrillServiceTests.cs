@@ -11,6 +11,7 @@ using Microsoft.Extensions.Options;
 using MockQueryable;
 using NSubstitute;
 using Shared.Options;
+using Shared.Services.Analytics;
 using Shared.Services.FileStorage.Intefaces;
 
 namespace Coaching.Tests.Unit.Services;
@@ -75,7 +76,8 @@ public class DrillServiceTests
             Options.Create(new S3Settings { Bucket = "test-bucket", PublicBaseUrl = "https://cdn.test" }),
             _mapper,
             Substitute.For<ILogger<DrillService>>(),
-            Substitute.For<IDrillDialReconciler>());
+            Substitute.For<IDrillDialReconciler>(),
+            Substitute.For<IAnalyticsCapture>());
     }
 
     private static Drill BuildDrill(
